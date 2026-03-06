@@ -1,0 +1,485 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, ScrollView, Pressable, Image, StyleSheet, Alert, Switch } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useColors } from '@/constants/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useInspectionStore } from '@/stores/inspectionStore';
+import { Button } from '@/components/ui/Button';
+import { AppModal } from '@/components/ui/AppModal';
+import { findingsService } from '@/services/findings/findingsService';
+import { ErrorHandler } from '@/utils/errorHandler';
+import { MockGPSBanner } from '@/components/ui/MockGPSBanner';
+import { GPSPermissionSheet } from '@/components/ui/GPSPermissionSheet';
+import { useGPS } from '@/hooks/useGPS';
+import { IS_PRODUCTION_API } from '@/config/environment';
+
+interface Props {
+  onBack: () => void;
+  requestId: string;
+  onGoToStep: (step: number) => void;
+}
+
+function ReviewCard({ title, onEdit, children, badge, colors }: { title: string; onEdit: () => void; children: React.ReactNode; badge?: string; colors: any }) {
+  const styles = StyleSheet.create({
+    card: {
+      backgroundColor: colors.bgCard,
+      borderRadius: 24, // Increased to 24px for premium feel
+      padding: 24,
+      borderWidth: 1.5,
+      borderColor: colors.borderDefault,
+      marginBottom: 32, // Consistent 32px rhythm
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: 16,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderDefault,
+    },
+    cardTitle: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: colors.textMuted,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+    },
+    headerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    badge: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+    },
+    badgeText: {
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+    },
+    editBtn: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+  });
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <View style={styles.headerRight}>
+          {badge && (
+            <View style={[styles.badge, { backgroundColor: badge === 'SATISFACTORY' ? colors.successSoft : colors.warningSoft }]}>
+              <Text style={[styles.badgeText, { color: badge === 'SATISFACTORY' ? colors.success : colors.warning }]}>{badge}</Text>
+            </View>
+          )}
+          <Pressable onPress={onEdit}>
+            <Text style={styles.editBtn}>Edit</Text>
+          </Pressable>
+        </View>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
+  const colors = useColors();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const storedDraft = useInspectionStore((s) => s.drafts[requestId]);
+  const [submitting, setSubmitting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [gpsSheetVisible, setGpsSheetVisible] = useState(false);
+  const [gpsSheetState, setGpsSheetState] = useState<'denied' | 'blocked' | 'unavailable'>('denied');
+
+  const { location, loading: gpsLoading, error: gpsError, refreshLocation, openSettings } = useGPS();
+
+  const [noEvidence, setNoEvidence] = useState(false);
+
+  const assignment = storedDraft?.assignment;
+  const step1 = storedDraft?.step1 || {};
+  const step2 = storedDraft?.step2 || {};
+  const step3 = storedDraft?.step3 || { findingData: {}, remarks: '' };
+  const photos = storedDraft?.photos || [];
+
+  const handleFinalSubmit = async () => {
+    if (photos.length === 0 && !noEvidence) {
+      Alert.alert(
+        'No Photos Attached',
+        'You haven\'t attached any photos. Check "No evidence available" if applicable, or add photos.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    await proceedWithGPS();
+  };
+
+  const proceedWithGPS = async () => {
+    const gpsResult = await refreshLocation(IS_PRODUCTION_API);
+    if (!gpsResult) {
+      if (gpsError?.code === 'DENIED' || gpsError?.code === 'BLOCKED' || gpsError?.code === 'UNAVAILABLE') {
+        setGpsSheetState(gpsError.code.toLowerCase() as 'denied' | 'blocked' | 'unavailable');
+        setGpsSheetVisible(true);
+        return;
+      }
+      Alert.alert('Location Error', gpsError?.message || 'Unable to capture location.');
+      return;
+    }
+
+    // Persist GPS to draft for review display
+    useInspectionStore.getState().setGPS(requestId, {
+      latitude: gpsResult.latitude,
+      longitude: gpsResult.longitude,
+      isMocked: gpsResult.isMocked,
+      rawCoordinates: gpsResult.rawCoordinates,
+    });
+
+    try {
+      setSubmitting(true);
+      const photosByField: Record<string, string[]> = {};
+      photos.forEach(p => {
+        const key = p.fieldKey || 'general';
+        if (!photosByField[key]) photosByField[key] = [];
+        photosByField[key].push(p.localUri);
+      });
+
+      await findingsService.submitFindings({
+        requestId,
+        findingData: {
+          ...step3.findingData,
+          remarks: step3.remarks,
+          totalTransactionsToDate: step1.totalTransactionsToDate,
+          thisInspectionNumber: step2.thisInspectionNumber,
+          inspectionDate: step2.inspectionDate,
+          inspectionType: step2.inspectionType,
+          inspectorDetail: step2.inspectorDetail,
+        },
+        overallStatus: (step3.findingData['overall_inspection_status_1772527935838'] as string) || 'satisfactory',
+        photosByField,
+        gpsCoordinates: {
+          latitude: gpsResult.latitude,
+          longitude: gpsResult.longitude,
+        },
+      });
+
+      useInspectionStore.getState().clearDraft(requestId);
+      if (assignment) {
+        (navigation as any).navigate('Success', { reference: assignment.referenceNumber });
+      }
+    } catch (err) {
+      console.log('[Submission Error]', err);
+      Alert.alert('Submission Failed', ErrorHandler.mapError(err).message);
+    } finally {
+      setSubmitting(false);
+      setShowConfirm(false);
+    }
+  };
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgScreen,
+    },
+    scrollContent: {
+      paddingHorizontal: 24,
+      paddingTop: 4,
+      paddingBottom: 140,
+    },
+    pageHeader: {
+      alignItems: 'center',
+      marginTop: 10,
+      marginBottom: 36,
+    },
+    readyIcon: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primaryGlow,
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+      marginBottom: 20,
+    },
+    checkMark: {
+      fontSize: 28,
+      fontWeight: '800',
+      color: colors.primary,
+    },
+    readyTitle: {
+      fontSize: 26,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      letterSpacing: -0.5,
+      marginBottom: 8,
+    },
+    readyDesc: {
+      fontSize: 14,
+      textAlign: 'center',
+      lineHeight: 22,
+      color: colors.textSecondary,
+      paddingHorizontal: 20,
+    },
+    noEvidenceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 16,
+      marginBottom: 8,
+      paddingHorizontal: 4,
+    },
+    noEvidenceText: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    infoRow: {
+      flexDirection: 'row',
+      marginBottom: 16,
+      gap: 16,
+    },
+    infoCol: {
+      flex: 1,
+    },
+    label: {
+      fontSize: 9,
+      fontWeight: '800',
+      color: colors.textMuted,
+      letterSpacing: 1,
+      marginBottom: 4,
+      textTransform: 'uppercase',
+    },
+    value: {
+      fontSize: 14,
+      color: colors.textPrimary,
+      fontWeight: '600',
+    },
+    secondaryValue: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    checklist: {
+      gap: 12,
+    },
+    checkItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    dot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      marginRight: 12,
+    },
+    checkLabel: {
+      fontSize: 14,
+      color: colors.textPrimary,
+    },
+    photoGrid: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    thumbnail: {
+      width: 64,
+      height: 64,
+      borderRadius: 16, // Increased radius for consistency
+      backgroundColor: colors.bgScreen,
+      borderWidth: 1.5,
+      borderColor: colors.borderDefault,
+    },
+    emptyText: {
+      fontSize: 13,
+      color: colors.textMuted,
+      fontStyle: 'italic',
+    },
+    notesBox: {
+      backgroundColor: colors.bgScreen,
+      borderRadius: 12,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.borderDefault,
+    },
+    notesText: {
+      fontSize: 14,
+      lineHeight: 22,
+      color: colors.textSecondary,
+      fontStyle: 'italic',
+    },
+    footer: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      padding: 20,
+      paddingBottom: 40,
+      backgroundColor: colors.bgScreen,
+      borderTopWidth: 1,
+      borderTopColor: colors.borderDefault,
+      gap: 12,
+    },
+    backBtn: { flex: 1 },
+    submitBtn: { flex: 2 },
+  }), [colors, insets]);
+
+
+  if (!assignment) return null;
+
+  return (
+    <View style={styles.container}>
+      <MockGPSBanner
+        visible={Boolean(__DEV__ && (storedDraft?.gps?.isMocked || photos.some(p => p.isMocked)))}
+        rawCoordinates={storedDraft?.gps?.rawCoordinates}
+      />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+        <View style={styles.pageHeader}>
+          <View style={styles.readyIcon}>
+            <Text style={styles.checkMark}>✓</Text>
+          </View>
+          <Text style={styles.readyTitle}>Review & Submit</Text>
+          <Text style={styles.readyDesc}>
+            Verify all findings before transmitting the final inspection report to the registry.
+          </Text>
+
+          <View style={styles.noEvidenceRow}>
+            <Text style={[styles.noEvidenceText, { color: colors.textSecondary }]}>No evidence available</Text>
+            <Switch value={noEvidence} onValueChange={setNoEvidence} />
+          </View>
+        </View>
+
+        <ReviewCard title="Asset Context" onEdit={() => onGoToStep(1)} colors={colors}>
+          <View style={styles.infoRow}>
+            <View style={styles.infoCol}>
+              <Text style={styles.label}>Client Name</Text>
+              <Text style={styles.value}>{assignment.clientName}</Text>
+            </View>
+            <View style={styles.infoCol}>
+              <Text style={styles.label}>Ref No.</Text>
+              <Text style={styles.value}>#{assignment.referenceNumber}</Text>
+            </View>
+          </View>
+          <View style={styles.infoCol}>
+            <Text style={styles.label}>Site Address</Text>
+            <Text style={styles.secondaryValue}>{assignment.siteAddress}, {assignment.siteCity}</Text>
+          </View>
+        </ReviewCard>
+
+        <ReviewCard title="Audit Logistics" onEdit={() => onGoToStep(2)} colors={colors}>
+          <View style={styles.infoRow}>
+            <View style={styles.infoCol}>
+              <Text style={styles.label}>Insp. No.</Text>
+              <Text style={styles.value}>{step2.thisInspectionNumber || assignment.thisInspectionNumber}</Text>
+            </View>
+            <View style={styles.infoCol}>
+              <Text style={styles.label}>Type</Text>
+              <Text style={styles.value}>{step2.inspectionType || 'Scheduled'}</Text>
+            </View>
+          </View>
+        </ReviewCard>
+
+        <ReviewCard
+          title="Field Observations"
+          onEdit={() => onGoToStep(3)}
+          badge={step3.overallStatus?.toUpperCase() || 'PENDING'}
+          colors={colors}
+        >
+          <View style={styles.checklist}>
+            {(storedDraft?.schemaSnapshot || []).slice(0, 3).map((f: any) => (
+              <View key={f.key} style={styles.checkItem}>
+                <View style={[styles.dot, { backgroundColor: step3.findingData?.[f.key] ? colors.success : colors.borderDefault }]} />
+                <Text style={styles.checkLabel}>{f.label}</Text>
+              </View>
+            ))}
+            {(storedDraft?.schemaSnapshot?.length || 0) > 3 && (
+              <Text style={styles.emptyText}>+ {(storedDraft?.schemaSnapshot?.length || 0) - 3} additional checks recorded.</Text>
+            )}
+          </View>
+        </ReviewCard>
+
+        <ReviewCard title="Media Evidence" onEdit={() => onGoToStep(4)} colors={colors}>
+          <View style={styles.photoGrid}>
+            {photos.length > 0 ? photos.slice(0, 4).map((p, idx) => (
+              <Image key={idx} source={{ uri: p.localUri }} style={styles.thumbnail} />
+            )) : (
+              <Text style={styles.emptyText}>No media files attached.</Text>
+            )}
+            {photos.length > 4 && (
+              <View style={[styles.thumbnail, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={styles.label}>+{photos.length - 4}</Text>
+              </View>
+            )}
+          </View>
+          {storedDraft?.gps && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={styles.label}>Audit Geotag</Text>
+              <Text style={styles.secondaryValue}>
+                {storedDraft.gps.latitude.toFixed(6)}, {storedDraft.gps.longitude.toFixed(6)}
+                {storedDraft.gps.isMocked ? ' (MOCKED)' : ' (VERIFIED)'}
+              </Text>
+            </View>
+          )}
+        </ReviewCard>
+
+        <ReviewCard title="Final Remarks" onEdit={() => onGoToStep(3)} colors={colors}>
+          <View style={styles.notesBox}>
+            <Text style={styles.notesText}>
+              {step3.remarks ? `"${step3.remarks}"` : 'No additional remarks provided.'}
+            </Text>
+          </View>
+        </ReviewCard>
+
+        {assignment?.opsNotes && (
+          <ReviewCard title="Return Notes" onEdit={() => {}} colors={colors}>
+            <View style={styles.notesBox}>
+              <Text style={styles.notesText}>{assignment.opsNotes}</Text>
+            </View>
+          </ReviewCard>
+        )}
+
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <Button title="‹ Back" variant="outline" onPress={onBack} style={styles.backBtn} />
+        <Button
+          title="Submit Report ✓"
+          onPress={() => setShowConfirm(true)}
+          style={styles.submitBtn}
+        />
+      </View>
+
+      <AppModal
+        isVisible={showConfirm}
+        onClose={() => !submitting && setShowConfirm(false)}
+        title="Finalize Submission"
+        icon="Award"
+        description={`Ready to submit the verification report for #${assignment.referenceNumber}? This action records your signature and timestamp.`}
+        primaryAction={{
+          label: submitting ? 'Sending...' : 'Confirm & Submit',
+          onPress: handleFinalSubmit,
+          loading: submitting,
+        }}
+        secondaryAction={{
+          label: 'Keep Reviewing',
+          onPress: () => setShowConfirm(false),
+        }}
+      />
+
+      <GPSPermissionSheet
+        visible={gpsSheetVisible}
+        state={gpsSheetState}
+        onRetry={async () => {
+          setGpsSheetVisible(false);
+          await refreshLocation(IS_PRODUCTION_API);
+        }}
+        onClose={() => setGpsSheetVisible(false)}
+      />
+    </View>
+  );
+}

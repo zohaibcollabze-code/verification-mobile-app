@@ -11,16 +11,14 @@ import { ErrorHandler } from '@/utils/errorHandler';
 import { findingsService } from '@/services/findings/findingsService';
 
 // Steps
-import Step1ClientDetails from './Step1ClientDetails';
 import Step3Findings from './Step3Findings';
 import Step4Photos from './Step4Photos';
 import ReviewScreen from './ReviewScreen';
 
 const STEPS = [
-  { id: 1, label: 'ASSET', name: 'Step1ClientDetails' },
-  { id: 2, label: 'FINDINGS', name: 'Step3Findings' },
-  { id: 3, label: 'MEDIA', name: 'Step4Photos' },
-  { id: 4, label: 'REVIEW', name: 'ReviewScreen' },
+  { id: 1, label: 'FINDINGS', name: 'Step3Findings' },
+  { id: 2, label: 'MEDIA', name: 'Step4Photos' },
+  { id: 3, label: 'REVIEW', name: 'ReviewScreen' },
 ];
 
 export default function InspectionNavigator() {
@@ -234,16 +232,6 @@ export default function InspectionNavigator() {
     // Using a more stable dependency: only re-run if requestId changes or if we explicitly need to check the snapshot
   }, [requestId, Boolean(draft?.schemaSnapshot?.length)]);
 
-  // Load previous inspection data for returned tasks
-  useEffect(() => {
-    if (assignment?.status?.toLowerCase() === 'returned') {
-      findingsService.getPreviousInspection(requestId).then(data => {
-        if (data) {
-          useInspectionStore.getState().updateFromPrevious(requestId, data);
-        }
-      });
-    }
-  }, [requestId, assignment]);
 
   // Handle Android hard-back button
   useFocusEffect(
@@ -283,11 +271,10 @@ export default function InspectionNavigator() {
       onGoToStep: (step: number) => setActiveStep(step)
     };
     switch (activeStep) {
-      case 1: return <Step1ClientDetails {...props} />;
-      case 2: return <Step3Findings {...props} />;
-      case 3: return <Step4Photos {...props} />;
-      case 4: return <ReviewScreen {...props} />;
-      default: return <Step1ClientDetails {...props} />;
+      case 1: return <Step3Findings {...props} />;
+      case 2: return <Step4Photos {...props} />;
+      case 3: return <ReviewScreen {...props} />;
+      default: return <Step3Findings {...props} />;
     }
   };
 

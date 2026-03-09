@@ -25,7 +25,7 @@ export class InspectorPermissions {
 
   static canSubmitFindings(job: Assignment, userId: string): boolean {
     return (
-      (job.status === 'IN_PROGRESS' || job.status === 'ACCEPTED' || job.status === 'ASSIGNED' || job.status === 'RETURNED') &&
+      job.status === 'IN_PROGRESS' &&
       job.current_assignment?.inspector_id === userId
     );
   }
@@ -33,6 +33,17 @@ export class InspectorPermissions {
   static canResubmitFindings(job: Assignment, userId: string): boolean {
     return (
       job.status === 'RETURNED' &&
+      job.current_assignment?.inspector_id === userId
+    );
+  }
+
+  /**
+   * Combined check for both submit and resubmit scenarios.
+   * Use this when you need to allow submission for both IN_PROGRESS and RETURNED.
+   */
+  static canSubmitOrResubmit(job: Assignment, userId: string): boolean {
+    return (
+      (job.status === 'IN_PROGRESS' || job.status === 'RETURNED') &&
       job.current_assignment?.inspector_id === userId
     );
   }

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, FlatList, RefreshControl, TextInput, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, FlatList, RefreshControl, TextInput, Pressable, StyleSheet, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,13 +12,12 @@ import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores/authStore';
 import type { RequestStatus } from '@/services/api/types/requestTypes';
 
-type FilterOption = 'ALL' | RequestStatus;
+type FilterOption = 'ALL' | 'assigned' | 'in_progress';
 
 const FILTERS: { key: FilterOption; label: string }[] = [
   { key: 'ALL', label: 'All' },
   { key: 'assigned', label: 'Assigned' },
   { key: 'in_progress', label: 'In Progress' },
-  { key: 'published', label: 'Published' },
 ];
 
 export function AssignmentsScreen() {
@@ -49,7 +48,7 @@ export function AssignmentsScreen() {
   );
 
   const filteredAssignments = useMemo(() => {
-    let results = jobs || [];
+    let results = (jobs || []).filter((a) => a.status !== 'published');
     if (filter !== 'ALL') {
       results = results.filter((a) => a.status === filter);
     }
@@ -109,11 +108,15 @@ export function AssignmentsScreen() {
         </View>
         <Pressable
           style={[styles.profileBtn, { backgroundColor: Colors.bgInput, borderColor: Colors.borderDefault }]}
-          onPress={() => navigation.navigate('Profile', { openEdit: true })}
+          onPress={() => navigation.navigate('Profile')}
         >
-          <View style={styles.avatarPlaceholder}>
-            <Text style={[styles.avatarText, { color: Colors.primary }]}>{initials}</Text>
-          </View>
+          {user?.profile_image ? (
+            <Image source={{ uri: user.profile_image }} style={{ width: '100%', height: '100%', borderRadius: 22 }} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={[styles.avatarText, { color: Colors.primary }]}>{initials}</Text>
+            </View>
+          )}
         </Pressable>
       </View>
 

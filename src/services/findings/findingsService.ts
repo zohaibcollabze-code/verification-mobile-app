@@ -18,7 +18,6 @@ export const findingsService = {
     if (params.overallStatus) {
       formData.append('overallStatus', params.overallStatus);
     }
-    formData.append('overallStatus', params.overallStatus);
     formData.append('gpsLatitude', latitude.toString());
     formData.append('gpsLongitude', longitude.toString());
 
@@ -56,33 +55,56 @@ export const findingsService = {
     }
 
     if (__DEV__) {
-      console.log('[findingsService] Submitting with GPS:', params.gpsCoordinates);
-      console.log('[findingsService] findingData keys:', Object.keys(params.findingData));
-      console.log('[findingsService] overallStatus:', params.overallStatus);
-      console.log('[findingsService] Photo fields:', Object.keys(params.photosByField));
+      console.clear();
+      console.log('\n========== FINDINGS SUBMISSION PAYLOAD ==========');
+      console.log('\n[REQUEST ID]:', params.requestId);
+      console.log('\n[GPS COORDINATES]:', JSON.stringify(params.gpsCoordinates, null, 2));
+      console.log('\n[OVERALL STATUS]:', params.overallStatus);
+      console.log('\n[FINDING DATA]:', JSON.stringify(params.findingData, null, 2));
+      console.log('\n[PHOTOS BY FIELD]:');
+      Object.entries(params.photosByField).forEach(([fieldKey, uris]) => {
+        console.log(`  - Field: "${fieldKey}" → ${uris.length} image(s)`);
+        uris.forEach((uri, idx) => {
+          console.log(`    [${idx + 1}] ${uri}`);
+        });
+      });
+      console.log('\n[FORM DATA ENTRIES]:');
+      console.log('  - findingData: [JSON stringified object]');
+      console.log('  - overallStatus:', params.overallStatus);
+      console.log('  - gpsLatitude:', latitude.toString());
+      console.log('  - gpsLongitude:', longitude.toString());
+      console.log('  - Images attached:', Object.values(params.photosByField).flat().length);
+      console.log('\n[PAYLOAD VALIDATION]:');
+      console.log('  - Request ID valid:', !!params.requestId);
+      console.log('  - GPS valid:', !!(latitude && longitude));
+      console.log('  - Finding data valid:', Object.keys(params.findingData).length > 0);
+      console.log('  - Overall status set:', !!params.overallStatus);
+      console.log('\n================================================\n');
     }
 
-    await apiClient.post(`/inspections/${params.requestId}/submit-findings`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      // Extended timeout for large uploads (§6.4)
-      timeout: 180000,
-    }).catch((err: any) => {
+    try {
+      console.log('[findingsService] Initiating submission to:', `/inspections/${params.requestId}/submit-findings`);
+      const response = await apiClient.post(`/inspections/${params.requestId}/submit-findings`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        // Extended timeout for large uploads (§6.4)
+        timeout: 180000,
+      });
+      console.log('[findingsService] ✅ Submission successful:', response.status);
+    } catch (err: any) {
+      console.error('[findingsService] ❌ Submission failed');
       if (err?.response) {
-        console.log('[findingsService] Server Error Response:', JSON.stringify(err.response.data, null, 2));
-        console.log('[findingsService] Server Status:', err.response.status);
+        console.error('[findingsService] Server Error Response:', JSON.stringify(err.response.data, null, 2));
+        console.error('[findingsService] Server Status:', err.response.status);
+        console.error('[findingsService] Server Headers:', err.response.headers);
+      } else if (err?.request) {
+        console.error('[findingsService] No response received from server');
+        console.error('[findingsService] Request config:', err.config?.url);
+      } else {
+        console.error('[findingsService] Request setup error:', err.message);
       }
       throw err;
-    });
-  },
-  getPreviousInspection: async (requestId: string) => {
-    try {
-      const response = await apiClient.get(`/inspections/${requestId}/previous`);
-      return response.data;
-    } catch (err) {
-      // If no previous data, return null
-      return null;
     }
   },
 };

@@ -3,6 +3,16 @@ import { jobsService } from '../services/jobs/jobsService';
 import { RequestModel, PaginatedRequestResult } from '../services/api/types/requestTypes';
 import { ErrorHandler } from '../utils/errorHandler';
 
+const sanitizeJobs = (items: RequestModel[]) =>
+  items.filter((job) => job.status?.toLowerCase() !== 'published');
+
+const sortJobs = (items: RequestModel[]) =>
+  [...items].sort((a, b) => {
+    const aDate = (a.dueDate ?? a.createdAt)?.getTime?.() ?? 0;
+    const bDate = (b.dueDate ?? b.createdAt)?.getTime?.() ?? 0;
+    return bDate - aDate;
+  });
+
 export const useJobs = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ message: string; code: string } | null>(null);
@@ -14,8 +24,9 @@ export const useJobs = () => {
     setError(null);
     try {
       const result = await jobsService.getJobs(params);
-      setJobs(result.items);
-      return result;
+      const sanitized = sortJobs(sanitizeJobs(result.items));
+      setJobs(sanitized);
+      return { ...result, items: sanitized };
     } catch (err) {
       const mappedError = ErrorHandler.handle(err);
       setError(mappedError);

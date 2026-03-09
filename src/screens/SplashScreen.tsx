@@ -1,6 +1,6 @@
 /**
- * MPVP — Splash Screen
- * Shows MPVP branding during app initialization.
+ * PAVMP — Splash Screen
+ * Shows PAVMP branding during app initialization.
  */
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
@@ -10,10 +10,10 @@ export function SplashScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.logoBox}>
-        <Text style={styles.logoText}>MPVP</Text>
+        <Text style={styles.logoText}>PAVMP</Text>
       </View>
       <Text style={styles.title}>Field Agent</Text>
-      <Text style={styles.subtitle}>Managed Physical Verification Platform</Text>
+      <Text style={styles.subtitle}>Physical Asset Verification & Management Platform</Text>
       <ActivityIndicator size="large" color={Colors.white} style={styles.loader} />
     </View>
   );

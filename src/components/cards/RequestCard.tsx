@@ -98,15 +98,22 @@ export function RequestCard({ request, onUpdate }: RequestCardProps) {
     const hasActions = canShowApprove || canShowReject;
 
     // Format date
-    const formattedDate = useMemo(() => {
+    const { dateLabel, formattedDate } = useMemo(() => {
+        const dateSource = request.dueDate ?? request.createdAt;
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         try {
-            const d = request.createdAt;
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+            const text = `${dateSource.getDate()} ${months[dateSource.getMonth()]} ${dateSource.getFullYear()}`;
+            return {
+                dateLabel: request.dueDate ? 'Due by' : 'Created on',
+                formattedDate: text,
+            };
         } catch {
-            return '—';
+            return {
+                dateLabel: request.dueDate ? 'Due by' : 'Created on',
+                formattedDate: '—',
+            };
         }
-    }, [request.createdAt]);
+    }, [request.dueDate, request.createdAt]);
 
     // Approve handler
     const handleApprove = useCallback(async () => {
@@ -184,7 +191,7 @@ export function RequestCard({ request, onUpdate }: RequestCardProps) {
             ) : null}
 
             <Text style={[styles.dateText, { color: Colors.textMuted }]}>
-                {formattedDate}
+                {dateLabel}: {formattedDate}
             </Text>
 
             {/* Error Message */}

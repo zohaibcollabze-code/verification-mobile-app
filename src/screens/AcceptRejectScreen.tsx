@@ -1,5 +1,5 @@
 /**
- * MPVP — Job Accept/Reject Screen (Dynamic Theme)
+ * PAVMP — Job Accept/Reject Screen (Dynamic Theme)
  * Formal job offer review with mandatory rejection reason if declined.
  */
 import React, { useState, useCallback, useMemo } from 'react';
@@ -55,17 +55,18 @@ export function AcceptRejectScreen() {
     setIsLoading(true);
     setShowAcceptModal(false);
     try {
-      if (assignment?.status?.toLowerCase() === 'returned') {
-        initDraft(requestId, assignment as any);
-        navigation.replace('InspectionForm', { requestId });
-        return;
+      const isReturnedLocal = assignment?.status?.toLowerCase() === 'returned';
+
+      if (!isReturnedLocal) {
+        const success = await acceptJob(requestId);
+        if (!success) {
+          throw new Error('Failed to accept job');
+        }
       }
-      const success = await acceptJob(requestId);
-      if (success && assignment) {
+
+      if (assignment) {
         initDraft(requestId, assignment as any);
         navigation.replace('InspectionForm', { requestId });
-      } else {
-        throw new Error('Failed to accept job');
       }
     } catch (err) {
       const mapped = ErrorHandler.handle(err);
@@ -118,7 +119,8 @@ export function AcceptRejectScreen() {
     }
   }, [requestId, selectedReason, otherReason, navigation, rejectJob]);
 
-  const title = assignment?.status?.toLowerCase() === 'returned' ? 'Resubmit Assignment' : 'Review Assignment';
+  const isReturned = assignment?.status?.toLowerCase() === 'returned';
+  const title = isReturned ? 'Review Returned Assignment' : 'Review Assignment';
 
   if (jobsLoading) return (
     <View style={[styles.center, { backgroundColor: Colors.bgScreen }]}>
@@ -133,11 +135,18 @@ export function AcceptRejectScreen() {
 
         {/* Branding & Offer Type */}
         <View style={styles.header}>
-          <View style={[styles.badge, { backgroundColor: Colors.primaryGlow, borderColor: Colors.primary }]}>
-            <Text style={[styles.badgeText, { color: Colors.primary }]}>PENDING OFFER</Text>
+          <View style={[styles.badge, { 
+            backgroundColor: isReturned ? Colors.warningSoft : Colors.primaryGlow, 
+            borderColor: isReturned ? Colors.warning : Colors.primary 
+          }]}>
+            <Text style={[styles.badgeText, { color: isReturned ? Colors.warning : Colors.primary }]}>
+              {isReturned ? 'RETURNED FOR REVISION' : 'PENDING OFFER'}
+            </Text>
           </View>
           <Text style={[styles.title, { color: Colors.textPrimary }]}>{title}</Text>
-          <Text style={[styles.subtitle, { color: Colors.textMuted }]}>Formal Verification Directive</Text>
+          <Text style={[styles.subtitle, { color: Colors.textMuted }]}>
+            {isReturned ? 'Corrections Required' : 'Formal Verification Directive'}
+          </Text>
         </View>
 
         {/* Job Brief Card */}
@@ -171,6 +180,17 @@ export function AcceptRejectScreen() {
             </View>
           </View>
         </View>
+
+        {/* Return Notes - Show prominently for RETURNED assignments */}
+        {isReturned && assignment.opsNotes && (
+          <View style={[styles.returnNotesBox, { backgroundColor: Colors.warningSoft, borderColor: Colors.warning }]}>
+            <View style={styles.returnNotesHeader}>
+              <GeometricIcon type="Alert" size={20} color={Colors.warning} />
+              <Text style={[styles.returnNotesTitle, { color: Colors.warning }]}>REVISION REQUIRED</Text>
+            </View>
+            <Text style={[styles.returnNotesText, { color: Colors.textPrimary }]}>{assignment.opsNotes}</Text>
+          </View>
+        )}
 
         {/* Requirements Section */}
         <View style={styles.section}>
@@ -207,7 +227,7 @@ export function AcceptRejectScreen() {
           style={styles.halfBtn}
         />
         <Button
-          title="Accept & Start"
+          title={isReturned ? 'Continue Resubmission' : 'Accept & Start'}
           onPress={handleAccept}
           loading={isLoading}
           style={styles.fullBtn}
@@ -282,11 +302,14 @@ export function AcceptRejectScreen() {
       <AppModal
         isVisible={showAcceptModal}
         onClose={() => setShowAcceptModal(false)}
-        title="Formal Acceptance"
+        title={isReturned ? 'Begin Resubmission' : 'Formal Acceptance'}
         icon="Document"
-        description="By accepting, you commit to performing this verification with high technical integrity within the deadline."
+        description={isReturned 
+          ? 'You will revise and resubmit this inspection based on the return notes. Previous data will be loaded for editing.'
+          : 'By accepting, you commit to performing this verification with high technical integrity within the deadline.'
+        }
         primaryAction={{
-          label: 'Confirm Acceptance',
+          label: isReturned ? 'Start Revision' : 'Confirm Acceptance',
           onPress: handleAcceptFinal,
           loading: isLoading,
         }}
@@ -516,5 +539,27 @@ const styles = StyleSheet.create({
   },
   modalSubmit: {
     width: '100%',
+  },
+  returnNotesBox: {
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 2,
+    marginBottom: 24,
+  },
+  returnNotesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  returnNotesTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
+  returnNotesText: {
+    fontSize: 15,
+    lineHeight: 24,
+    fontWeight: '600',
   },
 });

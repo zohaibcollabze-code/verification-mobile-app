@@ -27,19 +27,26 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [isUploadModalVisible, setUploadModalVisible] = useState(false);
   const [editPhotoId, setEditPhotoId] = useState<string | null>(null);
-  const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
+  const [fieldPickerVisible, setFieldPickerVisible] = useState(false);
 
   const photos = useMemo(() => storedDraft?.photos || [], [storedDraft]);
   const selectedPhoto = useMemo(() =>
     photos.find(p => p.id === selectedPhotoId),
     [photos, selectedPhotoId]);
 
-  const categories = useMemo(() => {
-    return (storedDraft?.schemaSnapshot || []).map(f => ({
-      key: f.key,
-      label: f.label
+  const schemaFields = useMemo(() => {
+    const schema = storedDraft?.schemaSnapshot || [];
+    return schema.map(field => ({
+      label: field.label || field.key,
+      value: field.key,
     }));
   }, [storedDraft?.schemaSnapshot]);
+
+  const getFieldLabel = useCallback((fieldKey: string | null) => {
+    if (!fieldKey) return 'General Evidence';
+    const field = schemaFields.find(f => f.value === fieldKey);
+    return field ? field.label : 'General Evidence';
+  }, [schemaFields]);
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -196,34 +203,37 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
       color: '#FFF',
       fontSize: 16,
     },
-    // ── Category Dropdown ────────────────────────────────
-    label: {
+    helperText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginBottom: 16,
+    },
+    fieldSelector: {
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: colors.borderDefault,
+      backgroundColor: colors.bgScreen,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      marginBottom: 16,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    fieldLabel: {
       fontSize: 11,
       fontWeight: '800',
       color: colors.textMuted,
       letterSpacing: 1,
       marginBottom: 8,
-      textTransform: 'uppercase',
     },
-    dropdown: {
-      height: 56,
-      borderRadius: 16, // Consistent 16px for inputs
-      borderWidth: 1.5,
-      borderColor: colors.borderDefault,
-      backgroundColor: colors.bgInput,
-      paddingHorizontal: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 20,
-    },
-    dropdownVal: {
-      fontSize: 15,
-      color: colors.textPrimary,
+    fieldValue: {
+      fontSize: 14,
       fontWeight: '600',
+      color: colors.textPrimary,
     },
-    chevron: {
-      fontSize: 12,
+    fieldArrow: {
+      fontSize: 16,
       color: colors.textMuted,
     },
     // ── Footer ───────────────────────────────────────────
@@ -288,17 +298,6 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
     },
   }), [colors]);
 
-  const handleCategoryPress = useCallback(() => {
-    setCategoryPickerVisible(true);
-  }, []);
-
-  const handleCategorySelect = useCallback((key: string | null) => {
-    if (selectedPhotoId) {
-      updatePhoto(requestId, selectedPhotoId, { fieldKey: key });
-    }
-    setCategoryPickerVisible(false);
-  }, [selectedPhotoId, requestId, updatePhoto]);
-
   const processMediaResult = (result: ImagePicker.ImagePickerResult, existingPhotoId?: string) => {
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
@@ -313,7 +312,7 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
         const newId = `media_${Date.now()}`;
         addPhoto(requestId, {
           id: newId,
-          localUri: asset.uri,
+          localUri: asset.uri,  
           attachmentId: null,
           s3Key: null,
           caption: '',
@@ -362,11 +361,6 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
   const openUploadOptions = (photoId?: string) => {
     setEditPhotoId(photoId || null);
     setUploadModalVisible(true);
-  };
-
-  const getCategoryLabel = (key: string | null) => {
-    if (!key) return 'General';
-    return categories.find(c => c.key === key)?.label || key;
   };
 
   return (
@@ -442,20 +436,23 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
               </View>
             </View>
 
+            <View style={{ marginBottom: 16 }}>
+              <Text style={styles.fieldLabel}>RELATED FIELD</Text>
+              <Pressable onPress={() => setFieldPickerVisible(true)} style={styles.fieldSelector}>
+                <Text style={styles.fieldValue}>{getFieldLabel(selectedPhoto.fieldKey)}</Text>
+                <Text style={styles.fieldArrow}>▼</Text>
+              </Pressable>
+              <Text style={styles.helperText}>
+                Select which inspection field this image relates to, or leave as "General Evidence".
+              </Text>
+            </View>
+
             <Input
               label="Evidence Title"
               value={selectedPhoto.caption || ''}
               onChangeText={(val) => updatePhoto(requestId, selectedPhoto.id, { caption: val })}
               placeholder="e.g. Front View of Machinery"
             />
-
-            <View style={{ marginTop: 16 }}>
-              <Text style={styles.label}>Category / Reference</Text>
-              <Pressable onPress={handleCategoryPress} style={styles.dropdown}>
-                <Text style={styles.dropdownVal}>{getCategoryLabel(selectedPhoto.fieldKey)}</Text>
-                <Text style={styles.chevron}>▼</Text>
-              </Pressable>
-            </View>
 
             <Input
               label="Observations"
@@ -495,19 +492,27 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
         </Pressable>
       </Modal>
 
+      <BottomSheetPicker
+        visible={fieldPickerVisible}
+        title="Select Related Field"
+        options={[
+          { label: 'General Evidence', value: null },
+          ...schemaFields,
+        ]}
+        selected={selectedPhoto?.fieldKey}
+        onSelect={(value) => {
+          if (selectedPhoto) {
+            updatePhoto(requestId, selectedPhoto.id, { fieldKey: value });
+          }
+          setFieldPickerVisible(false);
+        }}
+        onClose={() => setFieldPickerVisible(false)}
+      />
+
       <View style={styles.footer}>
         <Button title="Back" variant="outline" onPress={onBack} style={styles.backBtn} />
         <Button title="Review Report →" onPress={onNext} style={styles.nextBtn} />
       </View>
-
-      <BottomSheetPicker
-        visible={categoryPickerVisible}
-        title="Select Category"
-        options={[{ label: 'General', value: null }, ...categories.map(c => ({ label: c.label, value: c.key }))]}
-        selected={selectedPhoto?.fieldKey}
-        onSelect={handleCategorySelect}
-        onClose={() => setCategoryPickerVisible(false)}
-      />
     </View>
   );
 }

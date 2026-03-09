@@ -1,5 +1,5 @@
 /**
- * MPVP — Notifications Screen (Dynamic Theme)
+ * PAVMP — Notifications Screen (Dynamic Theme)
  * Matches Screenshot 5 design.
  */
 import React, { useState, useMemo, useCallback } from 'react';

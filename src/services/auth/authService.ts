@@ -1,6 +1,6 @@
 import apiClient from '../api/apiClient';
 import { LoginRequest, ApiResponse, LoginResponse } from '../../types/auth';
-import { setAccessToken, setRefreshToken, setUserData, clearSecureStorage } from '../storage/secureStorage';
+import { setAccessToken, setRefreshToken, setUserData, clearSecureStorage, getRefreshToken } from '../storage/secureStorage';
 
 export const authService = {
   login: async (request: LoginRequest): Promise<LoginResponse> => {
@@ -15,7 +15,16 @@ export const authService = {
       await setRefreshToken(data.refreshToken);
     }
     await setUserData(JSON.stringify(data.user));
-    
+
+    if (__DEV__) {
+      const storedRefresh = await getRefreshToken();
+      console.log('[authService] login token debug', {
+        receivedAccess: Boolean(data.accessToken),
+        receivedRefresh: Boolean(data.refreshToken),
+        storedRefreshPresent: Boolean(storedRefresh),
+      });
+    }
+
     return data;
   },
 
@@ -30,11 +39,20 @@ export const authService = {
   },
 
   changePassword: async (currentPassword: string, newPassword: string, confirmPassword: string): Promise<void> => {
-    await apiClient.post('/auth/change-password', {
-      currentPassword,
-      newPassword,
-      confirmPassword,
-    });
+    try {
+      const response = await apiClient.post('/auth/change-password', {
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+
+      if (__DEV__) {
+        console.log('[authService] changePassword success:', response.data);
+      }
+    } catch (error) {
+      console.error('[authService] changePassword failed', error);
+      throw error;
+    }
   },
 
   refreshToken: async (): Promise<string> => {

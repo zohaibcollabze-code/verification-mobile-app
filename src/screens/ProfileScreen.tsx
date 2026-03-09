@@ -2,8 +2,9 @@
  * MPVP — Profile Screen (Dynamic Theme)
  * Inspector profile with theme toggle, push notification controls, and avatar editing.
  */
-import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, StyleSheet, Switch, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import { View, Text, ScrollView, Pressable, Alert, StyleSheet, Switch, Platform, Modal, TextInput, KeyboardAvoidingView, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { useColors } from '@/constants/colors';
@@ -21,6 +22,7 @@ export function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const updateUser = useAuthStore((s) => s.updateUser);
   const { themeMode, toggleTheme } = useThemeStore();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -36,19 +38,33 @@ export function ProfileScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalDesc, setModalDesc] = useState('');
+  const [profileImage, setProfileImage] = useState<string | null>(user?.profile_image || null);
 
   // Auto-open edit modal if coming from Home screen circle
+  const handleOpenEditModal = useCallback(() => {
+    setEditName(user?.full_name || '');
+    setEditPhone(user?.phone_number || '');
+    setShowEditModal(true);
+  }, [user?.full_name, user?.phone_number]);
+
   useEffect(() => {
     if (route.params?.openEdit) {
-      setShowEditModal(true);
+      handleOpenEditModal();
     }
-  }, [route.params?.openEdit]);
+  }, [route.params?.openEdit, handleOpenEditModal]);
 
   const { loading: updating, updateProfile, fetchProfile } = useProfile();
 
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
+
+  useEffect(() => {
+    if (!showEditModal) {
+      setEditName(user?.full_name || '');
+      setEditPhone(user?.phone_number || '');
+    }
+  }, [user?.full_name, user?.phone_number, showEditModal]);
 
   const handleSignOutFinal = useCallback(async () => {
     setShowSignoutModal(false);
@@ -85,6 +101,54 @@ export function ProfileScreen() {
     setShowAvatarModal(true);
   }, []);
 
+  const handleCaptureImage = useCallback(async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Camera access is required to capture profile images.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      setProfileImage(uri);
+      updateUser({ profile_image: uri });
+      setShowAvatarModal(false);
+    }
+  }, [updateUser]);
+
+  const handleSelectFromLibrary = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Media library access is required to select profile images.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      setProfileImage(uri);
+      updateUser({ profile_image: uri });
+      setShowAvatarModal(false);
+    }
+  }, [updateUser]);
+
+  const assignedCities = useMemo(() => {
+    const rawCities = user?.cities_covered ?? (user as any)?.citiesCovered;
+    if (Array.isArray(rawCities) && rawCities.length > 0) {
+      return rawCities.join(', ');
+    }
+    return 'Not assigned yet';
+  }, [user]);
+
   if (!user) return null;
 
   return (
@@ -98,7 +162,11 @@ export function ProfileScreen() {
         <View style={[styles.hero, { borderBottomColor: Colors.borderDefault }]}>
           <View style={styles.avatarWrapper}>
             <View style={[styles.avatar, { backgroundColor: Colors.primaryGlow, borderColor: Colors.primary }]}>
-              <Text style={[styles.avatarText, { color: Colors.primary }]}>{user.profile_initials}</Text>
+              {profileImage ? (
+                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+              ) : (
+                <Text style={[styles.avatarText, { color: Colors.primary }]}>{user.profile_initials}</Text>
+              )}
             </View>
             <Pressable
               style={[styles.editIcon, { backgroundColor: Colors.primary, borderColor: Colors.bgScreen }]}
@@ -108,7 +176,8 @@ export function ProfileScreen() {
             </Pressable>
           </View>
 
-          <Text style={[styles.userName, { color: Colors.textPrimary }]}>{user.full_name}</Text>
+          <Text style={[styles.heroLabel, { color: Colors.textMuted }]}>AGENT NAME</Text>
+          <Text style={[styles.userName, { color: Colors.textPrimary }]}>{user.full_name || '—'}</Text>
           <Text style={[styles.userEmail, { color: Colors.textMuted }]}>{user.email}</Text>
           <View style={[styles.designationBadge, { backgroundColor: Colors.bgInput, borderColor: Colors.borderDefault }]}>
             <Text style={[styles.badgeText, { color: Colors.primary }]}>
@@ -121,7 +190,7 @@ export function ProfileScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionTitle1, { color: Colors.textMuted }]}>TECHNICAL PROFILE</Text>
-            <Pressable onPress={() => setShowEditModal(true)}>
+            <Pressable onPress={handleOpenEditModal}>
               <Text style={[styles.editLink, { color: Colors.primary }]}>Edit Details</Text>
             </Pressable>
           </View>
@@ -132,7 +201,7 @@ export function ProfileScreen() {
             <View style={[styles.divider, { backgroundColor: Colors.borderDefault }]} />
             <ProfileRow label="Mobile" value={maskPhone(user.phone_number)} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
             <View style={[styles.divider, { backgroundColor: Colors.borderDefault }]} />
-            <ProfileRow label="Assigned Cities" value={(user.cities_covered || []).join(', ')} multiline color={Colors.textPrimary} labelColor={Colors.textSecondary} />
+            <ProfileRow label="Assigned Cities" value={assignedCities} multiline color={Colors.textPrimary} labelColor={Colors.textSecondary} />
           </View>
         </View>
 
@@ -200,7 +269,7 @@ export function ProfileScreen() {
         />
 
         <View style={{ height: insets.bottom + 40 }} />
-        <Text style={[styles.versionInfo, { color: Colors.textMuted }]}>MPVP FIELD AGENT • VERSION 4.0.0 (STABLE)</Text>
+        <Text style={[styles.versionInfo, { color: Colors.textMuted }]}>PAVMP FIELD AGENT • VERSION 4.0.0 (STABLE)</Text>
       </ScrollView>
 
       <Modal visible={showEditModal} animationType="slide" transparent>
@@ -261,10 +330,10 @@ export function ProfileScreen() {
               Image capture and library access are restricted to corporate-approved devices.
             </Text>
 
-            <Pressable style={[styles.sheetItem, { borderBottomColor: Colors.borderDefault }]}>
+            <Pressable style={[styles.sheetItem, { borderBottomColor: Colors.borderDefault }]} onPress={handleCaptureImage}>
               <Text style={[styles.sheetItemText, { color: Colors.primary }]}>Capture New Image</Text>
             </Pressable>
-            <Pressable style={[styles.sheetItem, { borderBottomColor: Colors.borderDefault }]}>
+            <Pressable style={[styles.sheetItem, { borderBottomColor: Colors.borderDefault }]} onPress={handleSelectFromLibrary}>
               <Text style={[styles.sheetItemText, { color: Colors.primary }]}>Select from Secure Vault</Text>
             </Pressable>
             <Pressable style={styles.sheetItem} onPress={() => setShowAvatarModal(false)}>
@@ -313,6 +382,7 @@ export function ProfileScreen() {
 
 function ProfileRow({ label, value, isSecure, multiline, color, labelColor }: any) {
   const Colors = useColors();
+  const displayValue = value && value.toString().trim().length > 0 ? value : '—';
   return (
     <View style={styles.profileRow}>
       <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
@@ -322,7 +392,7 @@ function ProfileRow({ label, value, isSecure, multiline, color, labelColor }: an
             <GeometricIcon type="Lock" size={12} color={Colors.textMuted} />
           </View>
         )}
-        <Text style={[styles.value, { color }, multiline && styles.valueMultiline]}>{value}</Text>
+        <Text style={[styles.value, { color }, multiline && styles.valueMultiline]}>{displayValue}</Text>
       </View>
     </View>
   );
@@ -343,6 +413,11 @@ const styles = StyleSheet.create({
   avatarWrapper: {
     position: 'relative',
     marginBottom: 16,
+  },
+  heroLabel: {
+    fontSize: 12,
+    letterSpacing: 1.5,
+    marginBottom: 4,
   },
   avatar: {
     width: 90,
@@ -372,6 +447,11 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 32,
     fontWeight: '800',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 45,
   },
   userName: {
     fontSize: 24,

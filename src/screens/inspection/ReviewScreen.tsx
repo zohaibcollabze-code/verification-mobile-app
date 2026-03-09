@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/Button';
 import { AppModal } from '@/components/ui/AppModal';
 import { findingsService } from '@/services/findings/findingsService';
 import { ErrorHandler } from '@/utils/errorHandler';
-import { MockGPSBanner } from '@/components/ui/MockGPSBanner';
 import { GPSPermissionSheet } from '@/components/ui/GPSPermissionSheet';
 import { useGPS } from '@/hooks/useGPS';
 import { IS_PRODUCTION_API } from '@/config/environment';
@@ -99,7 +98,6 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
 
   const { location, loading: gpsLoading, error: gpsError, refreshLocation, openSettings } = useGPS();
 
-  const [noEvidence, setNoEvidence] = useState(false);
 
   const assignment = storedDraft?.assignment;
   const step1 = storedDraft?.step1 || {};
@@ -108,15 +106,6 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
   const photos = storedDraft?.photos || [];
 
   const handleFinalSubmit = async () => {
-    if (photos.length === 0 && !noEvidence) {
-      Alert.alert(
-        'No Photos Attached',
-        'You haven\'t attached any photos. Check "No evidence available" if applicable, or add photos.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
     await proceedWithGPS();
   };
 
@@ -226,18 +215,6 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
       color: colors.textSecondary,
       paddingHorizontal: 20,
     },
-    noEvidenceRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginTop: 16,
-      marginBottom: 8,
-      paddingHorizontal: 4,
-    },
-    noEvidenceText: {
-      fontSize: 14,
-      fontWeight: '600',
-    },
     infoRow: {
       flexDirection: 'row',
       marginBottom: 16,
@@ -333,25 +310,21 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
 
   return (
     <View style={styles.container}>
-      <MockGPSBanner
-        visible={Boolean(__DEV__ && (storedDraft?.gps?.isMocked || photos.some(p => p.isMocked)))}
-        rawCoordinates={storedDraft?.gps?.rawCoordinates}
-      />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         <View style={styles.pageHeader}>
           <View style={styles.readyIcon}>
             <Text style={styles.checkMark}>✓</Text>
           </View>
-          <Text style={styles.readyTitle}>Review & Submit</Text>
-          <Text style={styles.readyDesc}>
-            Verify all findings before transmitting the final inspection report to the registry.
+          <Text style={styles.readyTitle}>
+            {assignment.status?.toLowerCase() === 'returned' ? 'Review & Resubmit' : 'Review & Submit'}
           </Text>
-
-          <View style={styles.noEvidenceRow}>
-            <Text style={[styles.noEvidenceText, { color: colors.textSecondary }]}>No evidence available</Text>
-            <Switch value={noEvidence} onValueChange={setNoEvidence} />
-          </View>
+          <Text style={styles.readyDesc}>
+            {assignment.status?.toLowerCase() === 'returned' 
+              ? 'Verify all corrections before resubmitting the revised inspection report.'
+              : 'Verify all findings before transmitting the final inspection report to the registry.'
+            }
+          </Text>
         </View>
 
         <ReviewCard title="Asset Context" onEdit={() => onGoToStep(1)} colors={colors}>
@@ -448,7 +421,7 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
       <View style={styles.footer}>
         <Button title="‹ Back" variant="outline" onPress={onBack} style={styles.backBtn} />
         <Button
-          title="Submit Report ✓"
+          title={assignment.status?.toLowerCase() === 'returned' ? 'Resubmit Report ✓' : 'Submit Report ✓'}
           onPress={() => setShowConfirm(true)}
           style={styles.submitBtn}
         />
@@ -457,11 +430,14 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
       <AppModal
         isVisible={showConfirm}
         onClose={() => !submitting && setShowConfirm(false)}
-        title="Finalize Submission"
+        title={assignment.status?.toLowerCase() === 'returned' ? 'Finalize Resubmission' : 'Finalize Submission'}
         icon="Award"
-        description={`Ready to submit the verification report for #${assignment.referenceNumber}? This action records your signature and timestamp.`}
+        description={assignment.status?.toLowerCase() === 'returned'
+          ? `Ready to resubmit the revised verification report for #${assignment.referenceNumber}? This action records your corrections and timestamp.`
+          : `Ready to submit the verification report for #${assignment.referenceNumber}? This action records your signature and timestamp.`
+        }
         primaryAction={{
-          label: submitting ? 'Sending...' : 'Confirm & Submit',
+          label: submitting ? 'Sending...' : (assignment.status?.toLowerCase() === 'returned' ? 'Confirm & Resubmit' : 'Confirm & Submit'),
           onPress: handleFinalSubmit,
           loading: submitting,
         }}

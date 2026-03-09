@@ -118,7 +118,7 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
     contextRow: {
       flexDirection: 'row',
       gap: 16, // Increased
-      marginBottom: 40, // Increased
+      marginBottom: 20, // Increased
       flexWrap: 'wrap',
     },
     pill: {
@@ -149,7 +149,21 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
       borderWidth: 1.5,
       borderColor: colors.borderDefault,
       marginBottom: 32,
-      gap: 16, // Increased gap for better field spacing
+    },
+    fieldWrapper: {
+      paddingVertical: 14,
+      marginBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderDefault,
+    },
+    fieldWrapperFirst: {
+      paddingTop: 0,
+      marginTop: 4,
+    },
+    fieldWrapperLast: {
+      marginBottom: 0,
+      paddingBottom: 0,
+      borderBottomWidth: 0,
     },
     cardHeaderTitle: {
       fontSize: 10,
@@ -237,9 +251,7 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         <Text style={styles.pageTitle}>Detailed Findings</Text>
-        <Text style={styles.pageSubtitle}>
-          Execute technical checks below. Flag all anomalies with specific observations.
-        </Text>
+        
 
         {/* Context Pills */}
         <View style={styles.contextRow}>
@@ -256,41 +268,24 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
         {/* Dynamic Schema Fields Card */}
         <View style={styles.card}>
           <Text style={styles.cardHeaderTitle}>FIELD CHECKS</Text>
-          {visibleSchema.length > 0 ? visibleSchema.map((field) => (
-            <DynamicField
+          {visibleSchema.length > 0 ? visibleSchema.map((field, index) => (
+            <View
               key={field.key}
-              field={field}
-              value={step3.findingData[field.key]}
-              onChange={(val) => handleFieldChange(field.key, val)}
-            />
+              style={[
+                styles.fieldWrapper,
+                index === 0 && styles.fieldWrapperFirst,
+                index === visibleSchema.length - 1 && styles.fieldWrapperLast,
+              ]}
+            >
+              <DynamicField
+                field={field}
+                value={step3.findingData[field.key]}
+                onChange={(val) => handleFieldChange(field.key, val)}
+              />
+            </View>
           )) : (
             <Text style={styles.emptyHint}>No dynamic fields configured for this job type.</Text>
           )}
-        </View>
-
-        {/* Overall Status Selector */}
-        <Text style={styles.sectionTitle}>Overall Assessment</Text>
-        <View style={styles.statusGrid}>
-          {(['satisfactory', 'unsatisfactory', 'conditional'] as InspectionOverallStatus[]).map((status) => {
-            const isActive = step3.overallStatus === status;
-            const token = statusTokens[status];
-
-            return (
-              <Pressable
-                key={status}
-                onPress={() => handleStatusSelect(status)}
-                style={[
-                  styles.statusCard,
-                  isActive && { borderColor: token.border, backgroundColor: token.background }
-                ]}
-              >
-                <View style={[styles.statusIndicator, { backgroundColor: token.indicator }]} />
-                <Text style={[styles.statusText, isActive && { color: token.text }]}>
-                  {status.toUpperCase()}
-                </Text>
-              </Pressable>
-            );
-          })}
         </View>
 
         {/* Remarks */}

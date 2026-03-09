@@ -58,6 +58,7 @@ export interface Inspector {
   is_first_login: boolean;
   phone_number: string;
   profile_initials: string;
+  profile_image?: string | null;
 }
 
 // ─── Contract Type ────────────────────────────────────────

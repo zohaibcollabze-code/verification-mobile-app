@@ -16,6 +16,16 @@ import type {
 } from '../services/api/types/requestTypes';
 import { ErrorHandler } from '../utils/errorHandler';
 
+const sanitizeItems = (items: RequestModel[]) =>
+  items.filter((item) => item.status?.toLowerCase() !== 'published');
+
+const sortRequests = (items: RequestModel[]) =>
+  [...items].sort((a, b) => {
+    const aDate = (a.dueDate ?? a.createdAt)?.getTime?.() ?? 0;
+    const bDate = (b.dueDate ?? b.createdAt)?.getTime?.() ?? 0;
+    return bDate - aDate;
+  });
+
 export function useRequests() {
   const [data, setData] = useState<PaginatedRequestResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,19 +51,23 @@ export function useRequests() {
 
     try {
       const result = await fetchRequests(targetPage);
+      const sanitizedResult: PaginatedRequestResult = {
+        ...result,
+        items: sortRequests(sanitizeItems(result.items)),
+      };
 
       setData((prev) => {
         if (targetPage === 1 || !prev) {
-          return result;
+          return sanitizedResult;
         }
 
         // Append with deduplication by ID
         const existingIds = new Set(prev.items.map((item) => item.id));
-        const newItems = result.items.filter((item) => !existingIds.has(item.id));
+        const newItems = sanitizedResult.items.filter((item) => !existingIds.has(item.id));
 
         return {
-          ...result,
-          items: [...prev.items, ...newItems],
+          ...sanitizedResult,
+          items: sortRequests([...prev.items, ...newItems]),
         };
       });
     } catch (err: any) {

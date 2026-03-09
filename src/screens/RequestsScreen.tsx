@@ -1,5 +1,5 @@
 /**
- * MPVP — Requests List Screen
+ * PAVMP — Requests List Screen
  * Displays a paginated list of requests with pull-to-refresh,
  * infinite scroll, and in-place updates after actions.
  */
@@ -23,9 +23,10 @@ export function RequestsScreen() {
     const Colors = useColors();
     const { data, loading, error, refresh, loadMore, updateItem } = useRequests();
 
-    const hasData = data && data.items.length > 0;
+    const visibleItems = data ? data.items.filter(item => item.status?.toLowerCase() !== 'published') : [];
+    const hasData = visibleItems.length > 0;
     const isInitialLoad = loading && !data;
-    const isEmptyResult = !loading && data && data.items.length === 0;
+    const isEmptyResult = !loading && data && visibleItems.length === 0;
     const isErrorNoData = error && !data;
 
     // ─── Render item ────────────────────────────────────────
@@ -40,17 +41,52 @@ export function RequestsScreen() {
 
     const ListHeader = useCallback(() => {
         if (!data) return null;
+        
+        const approvedCount = visibleItems.filter(item => item.status?.toLowerCase() === 'accepted').length;
+        const declinedCount = visibleItems.filter(item => item.status?.toLowerCase() === 'rejected').length;
+        
         return (
-            <View style={styles.listHeader}>
-                <Text style={[styles.headerTitle, { color: Colors.textPrimary }]}>Requests</Text>
-                <View style={[styles.countBadge, { backgroundColor: Colors.primaryGlow }]}>
-                    <Text style={[styles.countText, { color: Colors.primary }]}>
-                        {data.totalCount}
-                    </Text>
+            <>
+                <View style={styles.listHeader}>
+                    <Text style={[styles.headerTitle, { color: Colors.textPrimary }]}>Requests</Text>
+                    <View style={[styles.countBadge, { backgroundColor: Colors.primaryGlow }]}>
+                        <Text style={[styles.countText, { color: Colors.primary }]}>
+                            {visibleItems.length}
+                        </Text>
+                    </View>
                 </View>
-            </View>
+                
+                <View style={styles.statsContainer}>
+                    <View style={[styles.statCard, {
+                        backgroundColor: Colors.successSoft,
+                        borderColor: Colors.success,
+                    }]}
+                    >
+                        <View style={[styles.statIconContainer, { backgroundColor: 'rgba(16,185,129,0.25)' }] }>
+                            <Text style={styles.statIcon}>✅</Text>
+                        </View>
+                        <View style={styles.statContent}>
+                            <Text style={[styles.statLabel, { color: Colors.success }]}>Approved</Text>
+                            <Text style={[styles.statValue, { color: Colors.textPrimary }]}>{approvedCount}</Text>
+                        </View>
+                    </View>
+                    
+                    <View style={[styles.statCard, {
+                        backgroundColor: Colors.dangerSoft,
+                        borderColor: Colors.danger,
+                    }]}>
+                        <View style={[styles.statIconContainer, { backgroundColor: 'rgba(239,68,68,0.25)' }]}>
+                            <Text style={styles.statIcon}>❌</Text>
+                        </View>
+                        <View style={styles.statContent}>
+                            <Text style={[styles.statLabel, { color: Colors.danger }]}>Declined</Text>
+                            <Text style={[styles.statValue, { color: Colors.textPrimary }]}>{declinedCount}</Text>
+                        </View>
+                    </View>
+                </View>
+            </>
         );
-    }, [data, Colors]);
+    }, [data, Colors, visibleItems]);
 
     // ─── Footer: loading spinner for next page ──────────────
 
@@ -143,7 +179,7 @@ export function RequestsScreen() {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: Colors.bgScreen }]} edges={['top']}>
             <FlatList
-                data={data?.items ?? []}
+                data={visibleItems}
                 renderItem={renderItem}
                 keyExtractor={keyExtractor}
                 contentContainerStyle={styles.listContent}
@@ -275,5 +311,44 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 20,
         marginBottom: 28,
+    },
+    statsContainer: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 20,
+    },
+    statCard: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        gap: 12,
+    },
+    statIconContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statIcon: {
+        fontSize: 20,
+    },
+    statContent: {
+        flex: 1,
+    },
+    statLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        marginBottom: 4,
+    },
+    statValue: {
+        fontSize: 24,
+        fontWeight: '800',
+        letterSpacing: -0.5,
     },
 });

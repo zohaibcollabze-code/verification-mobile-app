@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "PAVMP Field Agent",
-    "slug": "pavmp-field-agent",
+    "name": "PAVMP",
+    "slug": "pavmp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -29,7 +29,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "expo-image"
     ]
   }
 }

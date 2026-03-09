@@ -82,13 +82,13 @@ export function Input({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    marginBottom: 28,
     width: '100%',
   },
   label: {
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 10,
     marginLeft: 4,
     letterSpacing: 0.3,
   },

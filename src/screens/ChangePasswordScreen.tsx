@@ -1,5 +1,5 @@
 /**
- * MPVP — Change Password Screen (Premium Dark Theme)
+ * PAVMP — Change Password Screen (Premium Dark Theme)
  * Secure password update with strength indicator.
  */
 import React, { useState, useCallback } from 'react';

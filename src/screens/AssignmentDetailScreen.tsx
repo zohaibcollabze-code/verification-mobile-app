@@ -1,8 +1,8 @@
 /**
- * MPVP — Assignment Detail Screen (Dynamic Theme)
+ * PAVMP — Assignment Detail Screen (Dynamic Theme)
  * Shows full assignment details with status-driven CTAs.
  */
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -28,7 +28,7 @@ export function AssignmentDetailScreen() {
   const initDraft = useInspectionStore((s) => s.initDraft);
   const updateAssignment = useInspectionStore((s) => s.updateAssignment);
 
-  const [refreshing, setRefreshing] = React.useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -139,6 +139,56 @@ export function AssignmentDetailScreen() {
               <Text style={[styles.quickValue, { color: Colors.textSecondary }]}>{assignment.contractType?.name || 'Standard'}</Text>
             </View>
           </View>
+
+          <View style={styles.quickInfoGrid}>
+            <View style={styles.quickInfoItem}>
+              <Text style={[styles.quickLabel, { color: Colors.textMuted }]}>ASSIGNMENT CREATED</Text>
+              <Text style={[styles.quickValue, { color: Colors.textPrimary }]}>{formatDate(assignment.createdAt)}</Text>
+            </View>
+            <View style={styles.quickInfoItem}>
+              <Text style={[styles.quickLabel, { color: Colors.textMuted }]}>DEADLINE</Text>
+              <Text style={[styles.quickValue, assignment.dueDate ? { color: Colors.primary } : { color: Colors.textMuted }]}>
+                {assignment.dueDate ? formatDate(assignment.dueDate) : '—'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.timelineInline}>
+            <View style={styles.timelineInlineItem}>
+              <View style={[styles.timelineInlineDot, { backgroundColor: Colors.success }]} />
+              <View>
+                <Text style={[styles.timelineInlineLabel, { color: Colors.textPrimary }]}>Created</Text>
+                <Text style={[styles.timelineInlineValue, { color: Colors.textMuted }]}>{formatDate(assignment.createdAt)}</Text>
+              </View>
+            </View>
+            {assignment.status?.toLowerCase() === 'accepted' && (
+              <View style={styles.timelineInlineItem}>
+                <View style={[styles.timelineInlineDot, { backgroundColor: Colors.primary }]} />
+                <View>
+                  <Text style={[styles.timelineInlineLabel, { color: Colors.textPrimary }]}>Accepted</Text>
+                  <Text style={[styles.timelineInlineValue, { color: Colors.textMuted }]}>Inspector In Progress</Text>
+                </View>
+              </View>
+            )}
+            {assignment.status?.toLowerCase() === 'returned' && (
+              <View style={styles.timelineInlineItem}>
+                <View style={[styles.timelineInlineDot, { backgroundColor: Colors.warning }]} />
+                <View>
+                  <Text style={[styles.timelineInlineLabel, { color: Colors.textPrimary }]}>Returned</Text>
+                  <Text style={[styles.timelineInlineValue, { color: Colors.textMuted }]}>Awaiting Resubmission</Text>
+                </View>
+              </View>
+            )}
+            {assignment.dueDate && (
+              <View style={styles.timelineInlineItem}>
+                <View style={[styles.timelineInlineDot, { backgroundColor: Colors.danger }]} />
+                <View>
+                  <Text style={[styles.timelineInlineLabel, { color: Colors.textPrimary }]}>Deadline</Text>
+                  <Text style={[styles.timelineInlineValue, { color: Colors.primary }]}>{formatDate(assignment.dueDate)}</Text>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Detailed Information Sections */}
@@ -157,14 +207,6 @@ export function AssignmentDetailScreen() {
           <DetailRow label="Scope" value={assignment.inspectionScope} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
           <DetailRow label="Inventory Holding" value={`${assignment.inventoryHoldingDays} Days`} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
           <DetailRow label="Past Inspections" value={assignment.totalInspectionsToDate.toString()} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeader, { color: Colors.textMuted }]}>TIMELINE</Text>
-          <DetailRow label="Created On" value={formatDate(assignment.createdAt)} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
-          {assignment.dueDate && (
-            <DetailRow label="Deadline" value={formatDate(assignment.dueDate)} valueColor={Colors.primary} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
-          )}
         </View>
 
         {/* Operational Notes */}
@@ -370,5 +412,32 @@ const styles = StyleSheet.create({
   descriptionText: {
     fontSize: 15,
     lineHeight: 24,
+  },
+  timelineInline: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 12,
+  },
+  timelineInlineItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  timelineInlineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  timelineInlineLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  timelineInlineValue: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

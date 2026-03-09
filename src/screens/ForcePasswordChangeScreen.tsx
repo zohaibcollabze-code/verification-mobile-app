@@ -1,5 +1,5 @@
 /**
- * MPVP — Force Password Change Screen
+ * PAVMP — Force Password Change Screen
  * Mandatory first-time login credential rotation.
  */
 import React, { useState, useCallback, useEffect } from 'react';
@@ -112,7 +112,7 @@ export function ForcePasswordChangeScreen() {
 
           <View style={styles.branding}>
             <View style={styles.logoBox}>
-              <Text style={styles.logoText}>MPVP</Text>
+              <Text style={styles.logoText}>PAVMP</Text>
             </View>
             <Text style={styles.title}>Welcome, {user?.full_name.split(' ')[0]}</Text>
             <Text style={styles.subtitle}>INITIAL SECURITY PROTOCOL</Text>
@@ -208,7 +208,7 @@ export function ForcePasswordChangeScreen() {
         title="Protocol Initialized"
         icon="Award"
         iconColor={Colors.primary}
-        description="Your security credentials have been successfully rotated and synchronized. Welcome to the MPVP ecosystem."
+        description="Your security credentials have been successfully rotated and synchronized. Welcome to the PAVMP ecosystem."
         primaryAction={{
           label: 'Enter Dashboard',
           onPress: handleFinalRedirect,

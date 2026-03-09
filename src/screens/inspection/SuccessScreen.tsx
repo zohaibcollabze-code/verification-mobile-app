@@ -1,15 +1,109 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, Animated, Pressable, StyleSheet } from 'react-native';
+import React, { useRef, useEffect, useMemo } from 'react';
+import { View, Text, Animated, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/colors';
+import { useColors } from '@/constants/colors';
 import { Button } from '@/components/ui/Button';
 
 export default function SuccessScreen({ route, navigation }: { route: any; navigation: any }) {
+  const colors = useColors();
   const reference = route.params?.reference || 'REF-UNKNOWN';
   const circleScale = useRef(new Animated.Value(0)).current;
   const checkOpacity = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslate = useRef(new Animated.Value(20)).current;
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgScreen,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    },
+    circle: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 40,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.3,
+      shadowRadius: 20,
+      elevation: 8,
+    },
+    checkMark: {
+      fontSize: 44,
+      color: colors.textInverse,
+      fontWeight: '800',
+    },
+    content: {
+      alignItems: 'center',
+      width: '100%',
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      marginBottom: 16,
+      textAlign: 'center',
+    },
+    desc: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 24,
+      marginBottom: 48,
+      paddingHorizontal: 20,
+    },
+    refCard: {
+      width: '100%',
+      backgroundColor: colors.bgCard,
+      borderRadius: 20,
+      padding: 24,
+      borderWidth: 1,
+      borderColor: colors.borderDefault,
+      alignItems: 'center',
+      marginBottom: 60,
+      shadowColor: colors.dark900,
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: colors === undefined ? 0.15 : 0.15,
+      shadowRadius: 24,
+      elevation: 5,
+    },
+    refLabel: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.textMuted,
+      letterSpacing: 1.5,
+      marginBottom: 12,
+    },
+    refRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    refValue: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    refFooter: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginTop: 16,
+      fontWeight: '500',
+      textAlign: 'center',
+    },
+    buttonGroup: {
+      width: '100%',
+      gap: 12,
+    },
+    primaryBtn: {
+      width: '100%',
+    },
+  }), [colors]);
 
   useEffect(() => {
     Animated.sequence([
@@ -75,97 +169,3 @@ export default function SuccessScreen({ route, navigation }: { route: any; navig
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.bgScreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  circle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 40,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  checkMark: {
-    fontSize: 44,
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  content: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  desc: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 48,
-    paddingHorizontal: 20,
-  },
-  refCard: {
-    width: '100%',
-    backgroundColor: Colors.bgCard,
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: Colors.borderDefault,
-    alignItems: 'center',
-    marginBottom: 60,
-  },
-  refLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Colors.textMuted,
-    letterSpacing: 1.5,
-    marginBottom: 12,
-  },
-  refRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  refValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  copyIcon: {
-    fontSize: 20,
-  },
-  refFooter: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 16,
-    fontWeight: '500',
-  },
-  buttonGroup: {
-    width: '100%',
-    gap: 12,
-  },
-  primaryBtn: {
-    width: '100%',
-  },
-  outlineBtn: {
-    width: '100%',
-    borderColor: Colors.borderDefault,
-  },
-});

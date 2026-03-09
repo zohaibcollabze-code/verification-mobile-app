@@ -1,5 +1,5 @@
 /**
- * MPVP — Login Screen (Premium Dark Theme)
+ * PAVMP — Login Screen (Premium Dark Theme)
  * Email/password login with first-login check, account lockout, and high-fidelity branding.
  */
 import React, { useState, useCallback } from 'react';
@@ -82,11 +82,11 @@ export function LoginScreen() {
           <View style={styles.branding}>
             <View style={[styles.logoOuter, { backgroundColor: Colors.primaryGlow, borderColor: Colors.primary }]}>
               <View style={styles.logoInner}>
-                <Text style={[styles.logoText, { color: Colors.primary }]}>MPVP</Text>
+                <Text style={[styles.logoText, { color: Colors.primary }]}>PAVMP</Text>
               </View>
             </View>
-            <Text style={[styles.brandTitle, { color: '#FFF' }]}>FIELD AGENT</Text>
-            <Text style={[styles.brandTagline, { color: Colors.textMuted }]}>MANAGED PHYSICAL VERIFICATION PLATFORM</Text>
+            <Text style={[styles.brandTitle, { color: '#FFFFFF' }]}>FIELD AGENT</Text>
+            <Text style={[styles.brandTagline, { color: Colors.textSecondary }]}>MANAGED PHYSICAL VERIFICATION PLATFORM</Text>
           </View>
 
           {/* Login Form */}
@@ -104,7 +104,7 @@ export function LoginScreen() {
               label="OFFICE EMAIL"
               value={email}
               onChangeText={setEmail}
-              placeholder="agent.name@mpvp.pk"
+              placeholder="agent.name@pavmp.pk"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -189,12 +189,14 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: 4,
+    marginBottom: 4,
   },
   brandTagline: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
-    marginTop: 8,
+    marginTop: 4,
     textAlign: 'center',
+    letterSpacing: 1.5,
   },
   formContainer: {
     borderRadius: 24, // Consistent 24px card radius

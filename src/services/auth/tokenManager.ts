@@ -1,5 +1,5 @@
 /**
- * MPVP — Token Manager
+ * PAVMP — Token Manager
  * Centralized token management using expo-secure-store.
  * Single interface for reading, writing, refreshing, and clearing auth tokens.
  */
@@ -12,8 +12,13 @@ import {
 } from '../storage/secureStorage';
 import { AppException } from '../../utils/exceptions';
 import { authEvents } from '../../utils/authEvents';
+import { API_BASE_URL } from '@/config/environment';
 
-const BASE_URL = 'https://verification-platform-server.vercel.app/api';
+const BASE_URL = API_BASE_URL;
+const REFRESH_MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Store both access and refresh tokens after a successful login or refresh.
@@ -50,44 +55,55 @@ export async function refreshAccessToken(): Promise<string> {
     throw new AppException('No refresh token available', 'NO_REFRESH_TOKEN');
   }
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+  for (let attempt = 1; attempt <= REFRESH_MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const response = await fetch(`${BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({ refreshToken }),
-      signal: controller.signal,
-    });
+      const response = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+        signal: controller.signal,
+      });
 
-    clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      throw new Error(`Refresh failed with status ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Refresh failed with status ${response.status}`);
+      }
+
+      const body = await response.json();
+
+      if (body.success && body.data?.accessToken) {
+        const newAccessToken = body.data.accessToken;
+        const newRefreshToken = body.data.refreshToken || refreshToken;
+        await storeTokens(newAccessToken, newRefreshToken);
+        return newAccessToken;
+      }
+
+      throw new Error('Refresh response missing accessToken');
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(`[tokenManager] Refresh attempt ${attempt} failed:`, error);
+      }
+      if (attempt < REFRESH_MAX_RETRIES) {
+        await delay(RETRY_DELAY_MS * attempt);
+        continue;
+      }
+      await clearSecureStorage();
+      authEvents.emitLogout();
+      throw new AppException('Session expired. Please log in again.', 'SESSION_EXPIRED');
     }
-
-    const body = await response.json();
-
-    if (body.success && body.data?.accessToken) {
-      const newAccessToken = body.data.accessToken;
-      const newRefreshToken = body.data.refreshToken || refreshToken;
-      await storeTokens(newAccessToken, newRefreshToken);
-      return newAccessToken;
-    }
-
-    throw new Error('Refresh response missing accessToken');
-  } catch (error) {
-    if (__DEV__) {
-      console.warn('[tokenManager] Silent refresh failed:', error);
-    }
-    await clearSecureStorage();
-    authEvents.emitLogout();
-    throw new AppException('Session expired. Please log in again.', 'SESSION_EXPIRED');
   }
+
+  // Should never reach here
+  await clearSecureStorage();
+  authEvents.emitLogout();
+  throw new AppException('Session expired. Please log in again.', 'SESSION_EXPIRED');
 }
 
 /**

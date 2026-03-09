@@ -4,6 +4,7 @@ import { authService } from '../services/auth/authService';
 import { AppException } from '../utils/exceptions';
 import { getAccessToken, getUserData } from '../services/storage/secureStorage';
 import { authEvents } from '../utils/authEvents';
+import { tokenRefreshService } from '../services/auth/tokenRefreshService';
 
 interface AuthState {
   user: User | null;
@@ -26,6 +27,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setAuthenticated: (value) => set({ isAuthenticated: value }),
 
   logout: async () => {
+    tokenRefreshService.stop();
     // Call service to clear remote session if possible
     await authService.logout();
     set({ user: null, isAuthenticated: false });
@@ -45,6 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           user: JSON.parse(userData), 
           isAuthenticated: true 
         });
+        tokenRefreshService.start();
       }
     } catch (error) {
       console.error('Failed to initialize auth store', error);
@@ -60,6 +63,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         user: response.user, 
         isAuthenticated: true 
       });
+      tokenRefreshService.start();
       return { success: true };
     } catch (error: any) {
       // Check for account lockout (403 or specific code if mapped)
@@ -93,6 +97,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 // Global subscription for decoupled logout signals (e.g., from apiClient)
 authEvents.subscribe(() => {
+  tokenRefreshService.stop();
   useAuthStore.getState().setAuthenticated(false);
   useAuthStore.getState().setUser(null);
 });

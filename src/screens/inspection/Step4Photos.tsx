@@ -36,16 +36,17 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
 
   const schemaFields = useMemo(() => {
     const schema = storedDraft?.schemaSnapshot || [];
-    return schema.map(field => ({
-      label: field.label || field.key,
-      value: field.key,
-    }));
+    return schema
+      .filter((field) => field.photo === true || (field.photo === undefined && field.requires_photo === true))
+      .map((field) => ({
+        label: field.label || field.key,
+        value: field.key,
+      }));
   }, [storedDraft?.schemaSnapshot]);
 
   const getFieldLabel = useCallback((fieldKey: string | null) => {
-    if (!fieldKey) return 'General Evidence';
     const field = schemaFields.find(f => f.value === fieldKey);
-    return field ? field.label : 'General Evidence';
+    return field ? field.label : '';
   }, [schemaFields]);
 
   const styles = useMemo(() => StyleSheet.create({
@@ -496,7 +497,6 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
         visible={fieldPickerVisible}
         title="Select Related Field"
         options={[
-          { label: 'General Evidence', value: null },
           ...schemaFields,
         ]}
         selected={selectedPhoto?.fieldKey}

@@ -8,6 +8,7 @@ import * as SecureStore from 'expo-secure-store';
 const ACCESS_TOKEN_KEY = 'mpvp_access_token';
 const REFRESH_TOKEN_KEY = 'mpvp_refresh_token';
 const USER_KEY = 'mpvp_user_data';
+const REFRESH_TOKEN_BACKUP_KEY = 'mpvp_refresh_token_backup';
 
 /** Store the access token securely */
 export async function setAccessToken(token: string): Promise<void> {
@@ -37,6 +38,20 @@ export async function getRefreshToken(): Promise<string | null> {
   return SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
 }
 
+/** Store a backup refresh token (last known good) */
+export async function setBackupRefreshToken(token: string | null): Promise<void> {
+  if (!token) {
+    await SecureStore.deleteItemAsync(REFRESH_TOKEN_BACKUP_KEY);
+    return;
+  }
+  await SecureStore.setItemAsync(REFRESH_TOKEN_BACKUP_KEY, token);
+}
+
+/** Retrieve backup refresh token */
+export async function getBackupRefreshToken(): Promise<string | null> {
+  return SecureStore.getItemAsync(REFRESH_TOKEN_BACKUP_KEY);
+}
+
 /** Store serialized user data */
 export async function setUserData(userData: string): Promise<void> {
   if (typeof userData !== 'string') {
@@ -56,6 +71,7 @@ export async function clearSecureStorage(): Promise<void> {
   await Promise.all([
     SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
     SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
+    SecureStore.deleteItemAsync(REFRESH_TOKEN_BACKUP_KEY),
     SecureStore.deleteItemAsync(USER_KEY),
   ]);
 }

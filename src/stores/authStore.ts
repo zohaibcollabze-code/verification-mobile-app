@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { User } from '../types/auth';
 import { authService } from '../services/auth/authService';
 import { AppException } from '../utils/exceptions';
-import { getAccessToken, getUserData } from '../services/storage/secureStorage';
+import { getAccessToken, getRefreshToken, getUserData, clearSecureStorage, getBackupRefreshToken, setRefreshToken } from '../services/storage/secureStorage';
 import { authEvents } from '../utils/authEvents';
 import { tokenRefreshService } from '../services/auth/tokenRefreshService';
 
@@ -37,17 +37,30 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true });
     try {
       // Read token and user data in parallel — cuts secure-store wait time in half
-      const [token, userData] = await Promise.all([
+      const [accessToken, refreshTokenRaw, userData] = await Promise.all([
         getAccessToken(),
+        getRefreshToken(),
         getUserData(),
       ]);
 
-      if (token && userData) {
+      let refreshToken = refreshTokenRaw;
+      if (!refreshToken) {
+        const backupToken = await getBackupRefreshToken();
+        if (backupToken) {
+          refreshToken = backupToken;
+          await setRefreshToken(backupToken);
+        }
+      }
+
+      if (accessToken && refreshToken && userData) {
         set({ 
           user: JSON.parse(userData), 
           isAuthenticated: true 
         });
         tokenRefreshService.start();
+      } else {
+        await clearSecureStorage();
+        set({ user: null, isAuthenticated: false });
       }
     } catch (error) {
       console.error('Failed to initialize auth store', error);

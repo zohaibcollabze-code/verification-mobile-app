@@ -12,12 +12,14 @@ import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores/authStore';
 import type { RequestStatus } from '@/services/api/types/requestTypes';
 
-type FilterOption = 'ALL' | 'assigned' | 'in_progress';
+type FilterOption = 'ALL' | 'assigned' | 'in_progress' | 'submitted' | 'returned';
 
 const FILTERS: { key: FilterOption; label: string }[] = [
   { key: 'ALL', label: 'All' },
   { key: 'assigned', label: 'Assigned' },
   { key: 'in_progress', label: 'In Progress' },
+  { key: 'submitted', label: 'Submitted' },
+  { key: 'returned', label: 'Returned' },
 ];
 
 export function AssignmentsScreen() {
@@ -83,7 +85,7 @@ export function AssignmentsScreen() {
         <View style={styles.header}>
           <Skeleton width={150} height={30} />
         </View>
-        <View style={styles.searchSection}>
+        <View style={styles.controlsSection}>
           <Skeleton height={52} borderRadius={14} />
         </View>
         <View style={{ paddingHorizontal: 20 }}>
@@ -120,7 +122,7 @@ export function AssignmentsScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.searchSection}>
+      <View style={styles.controlsSection}>
         <View style={[styles.searchWrapper, { backgroundColor: Colors.bgInput, borderColor: Colors.borderDefault }]}>
           <View style={styles.searchIcon}>
             <GeometricIcon type="Search" size={18} color={Colors.textMuted} />
@@ -134,10 +136,13 @@ export function AssignmentsScreen() {
             autoCapitalize="none"
           />
         </View>
-      </View>
 
-      <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+          style={styles.filterScrollWrapper}
+        >
           {FILTERS.map((f) => {
             const isActive = f.key === filter;
             return (
@@ -191,21 +196,43 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
   headerTitle: { fontSize: 26, fontWeight: '800' },
   headerSubtitle: { fontSize: 13, marginTop: 2, fontWeight: '600' },
   profileBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 14, fontWeight: '800' },
-  searchSection: { paddingHorizontal: 24, paddingVertical: 12 },
-  searchWrapper: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, paddingHorizontal: 16, height: 56, borderWidth: 1.5 },
+  controlsSection: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 52,
+    borderWidth: 1.5,
+  },
   searchIcon: { fontSize: 16, marginRight: 12 },
   searchInput: { flex: 1, fontSize: 15 },
-  filterContainer: { marginBottom: 16 },
-  filterScroll: { paddingHorizontal: 24, gap: 10 },
-  filterChip: { paddingHorizontal: 22, paddingVertical: 12, borderRadius: 24, borderWidth: 1.5 },
+  filterScrollWrapper: {
+    marginTop: 4,
+  },
+  filterScroll: {
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  filterChip: {
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 22,
+    borderWidth: 1.5,
+  },
   filterText: { fontSize: 14, fontWeight: '600' },
   listContent: { paddingHorizontal: 24, paddingBottom: 100 },
   skeletonCard: { marginBottom: 16 },

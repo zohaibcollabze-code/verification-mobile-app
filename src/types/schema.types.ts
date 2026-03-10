@@ -26,6 +26,8 @@ export interface FindingsFieldSchema {
   type: FindingsFieldType;
   /** Whether the field is required for submission */
   required: boolean;
+  /** Offline spec: render-only flag for media-capable findings */
+  photo?: boolean;
   /** Options for dropdown type fields */
   options?: string[];
   /** Optional placeholder text */

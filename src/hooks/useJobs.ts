@@ -13,17 +13,45 @@ const sortJobs = (items: RequestModel[]) =>
     return bDate - aDate;
   });
 
+export interface JobSummary {
+  total: number;
+  published: number;
+  returned: number;
+  assigned: number;
+}
+
+const defaultSummary: JobSummary = {
+  total: 0,
+  published: 0,
+  returned: 0,
+  assigned: 0,
+};
+
+const buildSummary = (items: RequestModel[]): JobSummary => {
+  if (!items?.length) return defaultSummary;
+  return items.reduce<JobSummary>((acc, item) => {
+    const status = item.status?.toLowerCase?.() ?? '';
+    acc.total += 1;
+    if (status === 'published') acc.published += 1;
+    if (status === 'returned') acc.returned += 1;
+    if (status === 'assigned') acc.assigned += 1;
+    return acc;
+  }, { ...defaultSummary });
+};
+
 export const useJobs = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ message: string; code: string } | null>(null);
   const [jobs, setJobs] = useState<RequestModel[]>([]);
   const [jobDetail, setJobDetail] = useState<RequestModel | null>(null);
+  const [jobSummary, setJobSummary] = useState<JobSummary>(defaultSummary);
 
   const fetchJobs = useCallback(async (params?: any): Promise<PaginatedRequestResult | null> => {
     setLoading(true);
     setError(null);
     try {
       const result = await jobsService.getJobs(params);
+      setJobSummary(buildSummary(result.items));
       const sanitized = sortJobs(sanitizeJobs(result.items));
       setJobs(sanitized);
       return { ...result, items: sanitized };
@@ -91,6 +119,7 @@ export const useJobs = () => {
     error,
     jobs,
     jobDetail,
+    jobSummary,
     fetchJobs,
     fetchJobDetail,
     acceptJob,

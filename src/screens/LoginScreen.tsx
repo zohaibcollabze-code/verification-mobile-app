@@ -85,7 +85,7 @@ export function LoginScreen() {
                 <Text style={[styles.logoText, { color: Colors.primary }]}>PAVMP</Text>
               </View>
             </View>
-            <Text style={[styles.brandTitle, { color: '#FFFFFF' }]}>FIELD AGENT</Text>
+            <Text style={[styles.brandTitle, { color: '#000000ff' }]}>FIELD AGENT</Text>
             <Text style={[styles.brandTagline, { color: Colors.textSecondary }]}>MANAGED PHYSICAL VERIFICATION PLATFORM</Text>
           </View>
 

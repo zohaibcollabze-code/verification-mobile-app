@@ -29,6 +29,7 @@ import InspectionNavigator from '../screens/inspection/InspectionNavigator';
 import { RequestsScreen } from '../screens/RequestsScreen';
 import SuccessScreen from '../screens/inspection/SuccessScreen';
 import ApiErrorBoundary from '../components/ApiErrorBoundary';
+import { navigationRef, flushPendingNavigation } from '@/navigation/navigationRef';
 
 // Wrap RequestsScreen with ApiErrorBoundary for crash recovery
 function RequestsScreenWithBoundary() {
@@ -157,7 +158,11 @@ export function AppNavigator() {
   }
 
   return (
-    <NavigationContainer theme={theme}>
+    <NavigationContainer
+      theme={theme}
+      ref={navigationRef}
+      onReady={flushPendingNavigation}
+    >
       <StatusBar
         barStyle={themeMode === 'dark' ? "light-content" : "dark-content"}
         backgroundColor={Colors.bgScreen}

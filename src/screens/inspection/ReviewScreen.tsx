@@ -106,7 +106,12 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
   const photos = storedDraft?.photos || [];
 
   const handleFinalSubmit = async () => {
-    await proceedWithGPS();
+    setSubmitting(true);
+    try {
+      await proceedWithGPS();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const proceedWithGPS = async () => {
@@ -130,7 +135,6 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
     });
 
     try {
-      setSubmitting(true);
       const photosByField: Record<string, string[]> = {};
       photos.forEach(p => {
         const key = p.fieldKey || 'general';
@@ -165,7 +169,6 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
       console.log('[Submission Error]', err);
       Alert.alert('Submission Failed', ErrorHandler.mapError(err).message);
     } finally {
-      setSubmitting(false);
       setShowConfirm(false);
     }
   };

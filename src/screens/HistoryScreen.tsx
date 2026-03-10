@@ -11,15 +11,13 @@ import { AssignmentCard } from '@/components/cards/AssignmentCard';
 import { useJobs } from '@/hooks/useJobs';
 import type { AssignmentStatus } from '@/types/api.types';
 
-type HistoryFilter = 'ALL' | 'assigned' | 'in_progress' | 'submitted' | 'approved' | 'rejected';
+type HistoryFilter = 'ALL' | 'assigned' | 'in_progress' | 'submitted' ;
 
 const FILTERS: { key: HistoryFilter; label: string }[] = [
   { key: 'ALL', label: 'All' },
   { key: 'assigned', label: 'Assigned' },
   { key: 'in_progress', label: 'In Progress' },
   { key: 'submitted', label: 'Submitted' },
-  { key: 'approved', label: 'Approved' },
-  { key: 'rejected', label: 'Rejected' },
 ];
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,7 +41,7 @@ export function HistoryScreen() {
   const filtered = useMemo(() => {
     let results = jobs || [];
     // Show all jobs in History unless specifically filtered
-    const validStatuses = ['assigned', 'in_progress', 'submitted', 'approved', 'rejected', 'returned', 'cancelled'];
+    const validStatuses = ['assigned', 'in_progress', 'submitted','returned', 'cancelled'];
     results = results.filter(a => validStatuses.includes(a.status));
 
     if (filter !== 'ALL') {

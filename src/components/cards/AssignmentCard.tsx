@@ -18,6 +18,7 @@ interface AssignmentCardProps {
 export function AssignmentCard({ assignment, onPress, hasDraft }: AssignmentCardProps) {
   const Colors = useColors();
   const statusColor = (Colors.statusBadge as any)[assignment.status]?.text ?? Colors.primary;
+  const displayDate = assignment.dueDate || assignment.thisInspectionDate || assignment.createdAt;
 
   return (
     <Pressable
@@ -49,7 +50,7 @@ export function AssignmentCard({ assignment, onPress, hasDraft }: AssignmentCard
         <View>
           <Text style={[styles.footerLabel, { color: Colors.textMuted }]}>DUE DATE</Text>
           <Text style={[styles.footerValue, { color: Colors.textPrimary }]}>
-            {assignment.dueDate ? formatDate(assignment.dueDate) : 'TBD'}
+            {displayDate ? formatDate(displayDate) : 'TBD'}
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>

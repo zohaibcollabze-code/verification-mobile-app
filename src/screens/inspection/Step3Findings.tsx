@@ -74,8 +74,7 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
 
   // §7: Filter schema for conditional visibility
   const visibleSchema = useMemo(() => {
-    return schema.filter(field => {
-      // Example conditional logic from guide
+    return schema.filter((field) => {
       if (field.key === 'transfer_terms' && storedDraft?.assignment?.contractType?.code === 'IJA') {
         return !!step3.findingData.ownership_transfer_clause;
       }

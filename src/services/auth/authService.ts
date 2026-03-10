@@ -1,6 +1,6 @@
 import apiClient from '../api/apiClient';
 import { LoginRequest, ApiResponse, LoginResponse } from '../../types/auth';
-import { setAccessToken, setRefreshToken, setUserData, clearSecureStorage, getRefreshToken } from '../storage/secureStorage';
+import { setAccessToken, setRefreshToken, setUserData, clearSecureStorage, getRefreshToken, setBackupRefreshToken } from '../storage/secureStorage';
 
 export const authService = {
   login: async (request: LoginRequest): Promise<LoginResponse> => {
@@ -12,7 +12,10 @@ export const authService = {
       await setAccessToken(data.accessToken);
     }
     if (data.refreshToken) {
-      await setRefreshToken(data.refreshToken);
+      await Promise.all([
+        setRefreshToken(data.refreshToken),
+        setBackupRefreshToken(data.refreshToken),
+      ]);
     }
     await setUserData(JSON.stringify(data.user));
 

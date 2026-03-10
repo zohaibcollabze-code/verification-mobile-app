@@ -8,6 +8,8 @@ import {
   setAccessToken,
   getRefreshToken,
   setRefreshToken,
+  getBackupRefreshToken,
+  setBackupRefreshToken,
   clearSecureStorage,
 } from '../storage/secureStorage';
 import { AppException } from '../../utils/exceptions';
@@ -27,6 +29,7 @@ export const storeTokens = async (accessToken: string, refreshToken?: string): P
   await setAccessToken(accessToken);
   if (refreshToken) {
     await setRefreshToken(refreshToken);
+    await setBackupRefreshToken(refreshToken);
   }
 };
 
@@ -48,11 +51,17 @@ export async function getToken(): Promise<string> {
  * On failure, clears tokens and emits logout event.
  */
 export async function refreshAccessToken(): Promise<string> {
-  const refreshToken = await getRefreshToken();
+  let refreshToken = await getRefreshToken();
   if (!refreshToken) {
-    await clearSecureStorage();
-    authEvents.emitLogout();
-    throw new AppException('No refresh token available', 'NO_REFRESH_TOKEN');
+    const backup = await getBackupRefreshToken();
+    if (backup) {
+      refreshToken = backup;
+      await setRefreshToken(backup);
+    } else {
+      await clearSecureStorage();
+      authEvents.emitLogout();
+      throw new AppException('No refresh token available', 'NO_REFRESH_TOKEN');
+    }
   }
 
   for (let attempt = 1; attempt <= REFRESH_MAX_RETRIES; attempt++) {
@@ -87,6 +96,14 @@ export async function refreshAccessToken(): Promise<string> {
 
       throw new Error('Refresh response missing accessToken');
     } catch (error) {
+      if (attempt === 1 && refreshToken) {
+        const backup = await getBackupRefreshToken();
+        if (backup && backup !== refreshToken) {
+          refreshToken = backup;
+          await setRefreshToken(backup);
+          continue;
+        }
+      }
       if (__DEV__) {
         console.warn(`[tokenManager] Refresh attempt ${attempt} failed:`, error);
       }

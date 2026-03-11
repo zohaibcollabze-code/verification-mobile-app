@@ -16,6 +16,11 @@ import { GeometricIcon } from '@/components/ui/GeometricIcon';
 
 import { useJobs } from '@/hooks/useJobs';
 import { useInspectionStore } from '@/stores/inspectionStore';
+import { jobsService } from '@/services/jobs/jobsService';
+import { useAuthStore } from '@/stores/authStore';
+import * as AssignmentCacheDB from '@/services/db/assignments';
+import * as InspectionsDB from '@/services/db/inspections';
+import { useNetworkStore } from '@/stores/networkStore';
 
 export function AssignmentDetailScreen() {
   const Colors = useColors();
@@ -26,55 +31,86 @@ export function AssignmentDetailScreen() {
 
   const { jobDetail: assignment, loading, error, fetchJobDetail } = useJobs();
   const initDraft = useInspectionStore((s) => s.initDraft);
-  const updateAssignment = useInspectionStore((s) => s.updateAssignment);
+  const user = useAuthStore((s) => s.user);
+  const isOnline = useNetworkStore((s) => s.isOnline);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [cachedSchema, setCachedSchema] = useState<any[] | null>(null);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    const updated = await fetchJobDetail(requestId);
-    if (updated) updateAssignment(requestId, updated);
+    await fetchJobDetail(requestId);
     setRefreshing(false);
-  }, [fetchJobDetail, requestId, updateAssignment]);
+  }, [fetchJobDetail, requestId]);
 
   React.useEffect(() => {
     if (requestId) {
-      fetchJobDetail(requestId).then(updated => { if (updated) updateAssignment(requestId, updated); });
+      fetchJobDetail(requestId);
+      const cached = AssignmentCacheDB.getAssignment(requestId);
+      const existingInspection = InspectionsDB.getByAssignmentId(requestId);
+      const schemaSource = cached?.schemaSnapshot || existingInspection?.schemaSnapshot;
+      if (schemaSource) {
+        try {
+          setCachedSchema(JSON.parse(schemaSource));
+        } catch {
+          setCachedSchema(null);
+        }
+      }
     }
-  }, [requestId, fetchJobDetail, updateAssignment]);
+  }, [requestId, fetchJobDetail]);
 
   useFocusEffect(
     useCallback(() => {
       if (requestId) {
-        fetchJobDetail(requestId).then(updated => { if (updated) updateAssignment(requestId, updated); });
+        fetchJobDetail(requestId);
       }
-    }, [requestId, fetchJobDetail, updateAssignment])
+    }, [requestId, fetchJobDetail])
   );
 
-  const handleCTA = useCallback(() => {
-    if (!assignment) return;
+  const handleCTA = useCallback(async () => {
+    if (!assignment || !user) return;
     const status = assignment.status?.toLowerCase();
     switch (status) {
-      // Jobs awaiting acceptance decision
       case 'pending':
       case 'new':
       case 'assigned':
         navigation.navigate('AcceptReject', { requestId: assignment.id });
         break;
-      // Jobs returned for resubmission
       case 'returned':
         navigation.navigate('AcceptReject', { requestId: assignment.id });
         break;
-      // Jobs already accepted — begin or continue inspection
       case 'in_progress':
       case 'accepted':
-        initDraft(assignment.id, assignment as any);
-        navigation.navigate('InspectionForm', { requestId: assignment.id });
+        try {
+          const existingInspection = InspectionsDB.getByAssignmentId(assignment.id);
+          let schema = cachedSchema || (existingInspection?.schemaSnapshot ? JSON.parse(existingInspection.schemaSnapshot) : null);
+          if (isOnline) {
+            try {
+              const schemaData = await jobsService.getFindingsSchema(assignment.id);
+              schema = schemaData?.findingsSchema || [];
+              AssignmentCacheDB.saveSchemaSnapshot(assignment.id, JSON.stringify(schema));
+              setCachedSchema(schema);
+              if (existingInspection) {
+                InspectionsDB.updateSchemaSnapshot(existingInspection.localId, JSON.stringify(schema));
+              }
+            } catch (err) {
+              console.warn('[AssignmentDetail] Failed to fetch schema, using cached', err);
+            }
+          }
+          if (!schema || schema.length === 0) {
+            console.error('[AssignmentDetail] No schema available');
+            return;
+          }
+          await initDraft(assignment.id, user.id, schema, assignment);
+          navigation.navigate('InspectionForm', { requestId: assignment.id });
+        } catch (err) {
+          console.error('[AssignmentDetail] Failed to init draft', err);
+        }
         break;
       default:
         break;
     }
-  }, [assignment, navigation, initDraft]);
+  }, [assignment, user, navigation, initDraft]);
 
   if (!assignment) {
     return (

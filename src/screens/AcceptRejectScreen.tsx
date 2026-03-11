@@ -16,6 +16,11 @@ import { formatDate } from '@/utils/formatters';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorHandler } from '@/utils/errorHandler';
 import { useInspectionStore } from '@/stores/inspectionStore';
+import * as AssignmentCacheDB from '@/services/db/assignments';
+import * as InspectionsDB from '@/services/db/inspections';
+import { useNetworkStore } from '@/stores/networkStore';
+import { useAuthStore } from '@/stores/authStore';
+import { jobsService } from '@/services/jobs/jobsService';
 
 const REJECTION_REASONS = [
   'Site out of service area',
@@ -35,6 +40,8 @@ export function AcceptRejectScreen() {
 
   const { jobDetail: assignment, loading: jobsLoading, fetchJobDetail, acceptJob, rejectJob } = useJobs();
   const initDraft = useInspectionStore((s) => s.initDraft);
+  const isOnline = useNetworkStore((s) => s.isOnline);
+  const user = useAuthStore((s) => s.user);
 
   const [isLoading, setIsLoading] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -51,6 +58,34 @@ export function AcceptRejectScreen() {
     }
   }, [requestId, fetchJobDetail]);
 
+  React.useEffect(() => {
+    if (!assignment?.id || !isOnline) return;
+    const cached = AssignmentCacheDB.getAssignment(assignment.id);
+    const existingInspection = InspectionsDB.getByAssignmentId(assignment.id);
+    const hasSchema = Boolean(cached?.schemaSnapshot || existingInspection?.schemaSnapshot);
+    if (hasSchema) return;
+
+    let isMounted = true;
+    (async () => {
+      try {
+        const schemaData = await jobsService.getFindingsSchema(assignment.id);
+        const schema = schemaData?.findingsSchema || [];
+        if (!schema.length || !isMounted) return;
+        const serialized = JSON.stringify(schema);
+        AssignmentCacheDB.saveSchemaSnapshot(assignment.id, serialized);
+        if (existingInspection) {
+          InspectionsDB.updateSchemaSnapshot(existingInspection.localId, serialized);
+        }
+      } catch (err) {
+        console.warn('[AcceptReject] Failed to prefetch schema', err);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [assignment?.id, isOnline]);
+
   const handleAcceptFinal = useCallback(async () => {
     setIsLoading(true);
     setShowAcceptModal(false);
@@ -59,13 +94,31 @@ export function AcceptRejectScreen() {
 
       if (!isReturnedLocal) {
         const success = await acceptJob(requestId);
-        if (!success) {
+        if (!success && isOnline) {
           throw new Error('Failed to accept job');
         }
       }
 
-      if (assignment) {
-        initDraft(requestId, assignment as any);
+      if (assignment && user) {
+        const cached = AssignmentCacheDB.getAssignment(requestId);
+        const existingInspection = InspectionsDB.getByAssignmentId(requestId);
+        let schema: any[] = [];
+
+        const schemaSource = cached?.schemaSnapshot || existingInspection?.schemaSnapshot;
+        if (schemaSource) {
+          try {
+            schema = JSON.parse(schemaSource);
+          } catch {
+            schema = [];
+          }
+        }
+        if (schema.length === 0) {
+          setModalTitle('Schema Missing');
+          setModalDesc('Please connect to the internet at least once to download the inspection form.');
+          setShowGenericModal(true);
+          return;
+        }
+        await initDraft(requestId, user.id, schema, assignment);
         navigation.replace('InspectionForm', { requestId });
       }
     } catch (err) {
@@ -76,7 +129,7 @@ export function AcceptRejectScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [requestId, navigation, acceptJob, assignment, initDraft]);
+  }, [requestId, navigation, acceptJob, assignment, initDraft, isOnline, user]);
 
   const canAccept = useMemo(() => {
     if (!assignment) return false;

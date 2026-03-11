@@ -55,6 +55,20 @@ export function updateFormData(localId: string, formData: string): void {
   }
 }
 
+export function updateSchemaSnapshot(localId: string, schemaSnapshot: string): void {
+  try {
+    db.runSync(
+      `UPDATE inspections
+       SET schemaSnapshot = ?, updatedAt = ?
+       WHERE localId = ?;`,
+      [schemaSnapshot, now(), localId],
+    );
+  } catch (error) {
+    console.error('[DB] Failed to update schema snapshot', error);
+    throw error;
+  }
+}
+
 export function updateStatus(
   localId: string,
   status: InspectionRecord['status'],

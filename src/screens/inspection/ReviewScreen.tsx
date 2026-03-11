@@ -86,24 +86,54 @@ function ReviewCard({ title, onEdit, children, badge, colors }: { title: string;
   );
 }
 
+const FIELD_KEYS = {
+  totalTransactionsToDate: 'totalTransactionsToDate',
+  thisInspectionNumber: 'thisInspectionNumber',
+  inspectionType: 'inspectionType',
+  inspectionDate: 'inspectionDate',
+  inspectorDetail: 'inspectorDetail',
+  remarks: 'remarks',
+  overallStatus: 'overall_inspection_status',
+};
+
 export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
   const colors = useColors();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const storedDraft = useInspectionStore((s) => s.drafts[requestId]);
+  const activeInspection = useInspectionStore((s) => s.activeInspection);
+  const assignment = useInspectionStore((s) => s.assignment);
+  const photos = useInspectionStore((s) => s.photos);
+  const getFormData = useInspectionStore((s) => s.getFormData);
+  const getSchema = useInspectionStore((s) => s.getSchema);
+  const gps = useInspectionStore((s) => s.gps);
+  const setGPS = useInspectionStore((s) => s.setGPS);
+  const clearActive = useInspectionStore((s) => s.clearActive);
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [gpsSheetVisible, setGpsSheetVisible] = useState(false);
   const [gpsSheetState, setGpsSheetState] = useState<'denied' | 'blocked' | 'unavailable'>('denied');
 
-  const { location, loading: gpsLoading, error: gpsError, refreshLocation, openSettings } = useGPS();
+  const { loading: gpsLoading, error: gpsError, refreshLocation, openSettings } = useGPS();
 
+  const formData = useMemo(() => getFormData(), [getFormData, activeInspection?.formData]);
+  const schemaSnapshot = useMemo(() => getSchema(), [getSchema, activeInspection?.schemaSnapshot]);
 
-  const assignment = storedDraft?.assignment;
-  const step1 = storedDraft?.step1 || {};
-  const step2 = storedDraft?.step2 || {};
-  const step3 = storedDraft?.step3 || { findingData: {}, remarks: '' };
-  const photos = storedDraft?.photos || [];
+  const step1 = {
+    totalTransactionsToDate: formData[FIELD_KEYS.totalTransactionsToDate] ?? null,
+  };
+
+  const step2 = {
+    thisInspectionNumber: formData[FIELD_KEYS.thisInspectionNumber] ?? assignment?.thisInspectionNumber ?? 1,
+    inspectionType: formData[FIELD_KEYS.inspectionType] ?? assignment?.inspectionType ?? '',
+    inspectionDate: formData[FIELD_KEYS.inspectionDate] ?? new Date().toLocaleDateString(),
+    inspectorDetail: formData[FIELD_KEYS.inspectorDetail] ?? assignment?.userName ?? '',
+  };
+
+  const step3 = {
+    findingData: formData,
+    remarks: formData[FIELD_KEYS.remarks] ?? '',
+    overallStatus: formData[FIELD_KEYS.overallStatus] ?? 'satisfactory',
+  };
 
   const handleFinalSubmit = async () => {
     setSubmitting(true);
@@ -127,7 +157,7 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
     }
 
     // Persist GPS to draft for review display
-    useInspectionStore.getState().setGPS(requestId, {
+    setGPS({
       latitude: gpsResult.latitude,
       longitude: gpsResult.longitude,
       isMocked: gpsResult.isMocked,
@@ -136,10 +166,12 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
 
     try {
       const photosByField: Record<string, string[]> = {};
-      photos.forEach(p => {
-        const key = p.fieldKey || 'general';
+      photos.forEach((p) => {
+        const key = p.fieldId || 'general';
         if (!photosByField[key]) photosByField[key] = [];
-        photosByField[key].push(p.localUri);
+        if (p.localUri) {
+          photosByField[key].push(p.localUri);
+        }
       });
 
       await findingsService.submitFindings({
@@ -153,7 +185,7 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
           inspectionType: step2.inspectionType,
           inspectorDetail: step2.inspectorDetail,
         },
-        overallStatus: (step3.findingData['overall_inspection_status_1772527935838'] as string) || 'satisfactory',
+        overallStatus: (step3.findingData[FIELD_KEYS.overallStatus] as string) || 'satisfactory',
         photosByField,
         gpsCoordinates: {
           latitude: gpsResult.latitude,
@@ -161,7 +193,7 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
         },
       });
 
-      useInspectionStore.getState().clearDraft(requestId);
+      clearActive();
       if (assignment) {
         (navigation as any).navigate('Success', { reference: assignment.referenceNumber });
       }
@@ -351,30 +383,35 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
           <View style={styles.infoRow}>
             <View style={styles.infoCol}>
               <Text style={styles.label}>Insp. No.</Text>
-              <Text style={styles.value}>{step2.thisInspectionNumber || assignment.thisInspectionNumber}</Text>
+              <Text style={styles.value}>{step2.thisInspectionNumber}</Text>
             </View>
             <View style={styles.infoCol}>
               <Text style={styles.label}>Type</Text>
               <Text style={styles.value}>{step2.inspectionType || 'Scheduled'}</Text>
             </View>
           </View>
+          <View style={styles.infoRow}>
+            <View style={styles.infoCol}>
+              <Text style={styles.label}>Inspection Date</Text>
+              <Text style={styles.value}>{step2.inspectionDate}</Text>
+            </View>
+            <View style={styles.infoCol}>
+              <Text style={styles.label}>Inspector</Text>
+              <Text style={styles.value}>{step2.inspectorDetail || assignment.userName}</Text>
+            </View>
+          </View>
         </ReviewCard>
 
-        <ReviewCard
-          title="Field Observations"
-          onEdit={() => onGoToStep(3)}
-          badge={step3.overallStatus?.toUpperCase() || 'PENDING'}
-          colors={colors}
-        >
+        <ReviewCard title="Field Observations" onEdit={() => onGoToStep(3)} badge={step3.overallStatus?.toUpperCase() || 'PENDING'} colors={colors}>
           <View style={styles.checklist}>
-            {(storedDraft?.schemaSnapshot || []).slice(0, 3).map((f: any) => (
+            {(schemaSnapshot || []).slice(0, 3).map((f: any) => (
               <View key={f.key} style={styles.checkItem}>
                 <View style={[styles.dot, { backgroundColor: step3.findingData?.[f.key] ? colors.success : colors.borderDefault }]} />
                 <Text style={styles.checkLabel}>{f.label}</Text>
               </View>
             ))}
-            {(storedDraft?.schemaSnapshot?.length || 0) > 3 && (
-              <Text style={styles.emptyText}>+ {(storedDraft?.schemaSnapshot?.length || 0) - 3} additional checks recorded.</Text>
+            {(schemaSnapshot?.length || 0) > 3 && (
+              <Text style={styles.emptyText}>+ {(schemaSnapshot?.length || 0) - 3} additional checks recorded.</Text>
             )}
           </View>
         </ReviewCard>
@@ -382,29 +419,26 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
         <ReviewCard title="Media Evidence" onEdit={() => onGoToStep(4)} colors={colors}>
           <View style={styles.photoGrid}>
             {photos.length > 0 ? photos.slice(0, 4).map((p, idx) => (
-              <Image key={idx} source={{ uri: p.localUri }} style={styles.thumbnail} />
+              <Image key={idx} source={{ uri: p.localUri ?? undefined }} style={styles.thumbnail} />
             )) : (
               <Text style={styles.emptyText}>No media files attached.</Text>
             )}
             {photos.length > 4 && (
-              <View style={[styles.thumbnail, { alignItems: 'center', justifyContent: 'center' }]}>
+              <View style={[styles.thumbnail, { alignItems: 'center', justifyContent: 'center' }] }>
                 <Text style={styles.label}>+{photos.length - 4}</Text>
               </View>
             )}
           </View>
-          {storedDraft?.gps && (
+          {gps && (
             <View style={{ marginTop: 16 }}>
               <Text style={styles.label}>Audit Geotag</Text>
               <Text style={styles.secondaryValue}>
-                {storedDraft.gps.latitude.toFixed(6)}, {storedDraft.gps.longitude.toFixed(6)}
-                {storedDraft.gps.isMocked ? ' (MOCKED)' : ' (VERIFIED)'}
+                {gps.latitude.toFixed(6)}, {gps.longitude.toFixed(6)}
+                {gps.isMocked ? ' (MOCKED)' : ' (VERIFIED)'}
               </Text>
             </View>
           )}
-        </ReviewCard>
-
-        <ReviewCard title="Final Remarks" onEdit={() => onGoToStep(3)} colors={colors}>
-          <View style={styles.notesBox}>
+          <View style={[styles.notesBox, { marginTop: 16 }]}>
             <Text style={styles.notesText}>
               {step3.remarks ? `"${step3.remarks}"` : 'No additional remarks provided.'}
             </Text>

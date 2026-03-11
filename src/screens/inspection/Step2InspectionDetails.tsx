@@ -12,21 +12,32 @@ interface Props {
   requestId: string;
 }
 
-export default function Step2InspectionDetails({ onNext, onBack, requestId }: Props) {
+const FIELD_KEYS = {
+  thisInspectionNumber: 'thisInspectionNumber',
+  inspectionDate: 'inspectionDate',
+  previousInspectionStatus: 'previousInspectionStatus',
+  scopeOfInspection: 'scopeOfInspection',
+  inspectionType: 'inspectionType',
+  inspectorDetail: 'inspectorDetail',
+};
+
+export default function Step2InspectionDetails({ onNext, onBack }: Props) {
   const colors = useColors();
-  const storedDraft = useInspectionStore((s) => s.drafts[requestId]);
-  const updateStep2 = useInspectionStore((s) => s.updateStep2);
+  const activeInspection = useInspectionStore((s) => s.activeInspection);
+  const assignment = useInspectionStore((s) => s.assignment);
+  const getFormData = useInspectionStore((s) => s.getFormData);
+  const updateField = useInspectionStore((s) => s.updateField);
   const user = useAuthStore((s) => s.user);
 
-  const assignment = storedDraft?.assignment;
+  const formData = useMemo(() => getFormData(), [getFormData, activeInspection?.formData]);
 
   const step2 = {
-    thisInspectionNumber: storedDraft?.step2?.thisInspectionNumber ?? assignment?.thisInspectionNumber ?? 1,
-    inspectionDate: storedDraft?.step2?.inspectionDate ?? new Date().toLocaleDateString(),
-    previousInspectionStatus: storedDraft?.step2?.previousInspectionStatus ?? assignment?.previousInspectionStatus ?? '',
-    scopeOfInspection: storedDraft?.step2?.scopeOfInspection ?? assignment?.inspectionScope ?? '',
-    inspectionType: storedDraft?.step2?.inspectionType ?? assignment?.inspectionType ?? '',
-    inspectorDetail: storedDraft?.step2?.inspectorDetail ?? assignment?.userName ?? user?.full_name ?? '',
+    thisInspectionNumber: formData[FIELD_KEYS.thisInspectionNumber] ?? assignment?.thisInspectionNumber ?? 1,
+    inspectionDate: formData[FIELD_KEYS.inspectionDate] ?? new Date().toLocaleDateString(),
+    previousInspectionStatus: formData[FIELD_KEYS.previousInspectionStatus] ?? assignment?.previousInspectionStatus ?? '',
+    scopeOfInspection: formData[FIELD_KEYS.scopeOfInspection] ?? assignment?.inspectionScope ?? '',
+    inspectionType: formData[FIELD_KEYS.inspectionType] ?? assignment?.inspectionType ?? '',
+    inspectorDetail: formData[FIELD_KEYS.inspectorDetail] ?? assignment?.userName ?? user?.full_name ?? '',
   };
 
   const styles = useMemo(() => StyleSheet.create({
@@ -108,7 +119,7 @@ export default function Step2InspectionDetails({ onNext, onBack, requestId }: Pr
           <Input
             label="This Inspection No."
             value={step2.thisInspectionNumber?.toString() || ''}
-            onChangeText={(val) => updateStep2(requestId, { thisInspectionNumber: parseInt(val) || 0 })}
+            onChangeText={(val) => updateField(FIELD_KEYS.thisInspectionNumber, parseInt(val, 10) || 0)}
             placeholder="1"
             keyboardType="numeric"
           />
@@ -116,7 +127,7 @@ export default function Step2InspectionDetails({ onNext, onBack, requestId }: Pr
           <Input
             label="Inspection Scope"
             value={step2.scopeOfInspection}
-            onChangeText={(val) => updateStep2(requestId, { scopeOfInspection: val })}
+            onChangeText={(val) => updateField(FIELD_KEYS.scopeOfInspection, val)}
             placeholder="e.g. Physical count & verification of fresh goods"
             multiline
             numberOfLines={4}
@@ -126,14 +137,14 @@ export default function Step2InspectionDetails({ onNext, onBack, requestId }: Pr
           <Input
             label="Inspection Type"
             value={step2.inspectionType || ''}
-            onChangeText={(val) => updateStep2(requestId, { inspectionType: val as any })}
+            onChangeText={(val) => updateField(FIELD_KEYS.inspectionType, val)}
             placeholder="Scheduled / Surprise / Follow-up"
           />
 
           <Input
             label="Inspector Identity"
             value={step2.inspectorDetail}
-            onChangeText={(val) => updateStep2(requestId, { inspectorDetail: val })}
+            onChangeText={(val) => updateField(FIELD_KEYS.inspectorDetail, val)}
             placeholder="Verified Agent Name"
           />
         </View>

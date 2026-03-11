@@ -1,20 +1,19 @@
-/**
- * MPVP — OfflineBanner Component
- * Shown when network is unavailable. 36px dark banner above everything.
- */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useNetworkStore } from '@/stores/networkStore';
 
-interface OfflineBannerProps {
-  isOffline: boolean;
-}
+export function OfflineBanner() {
+  const bannerVisible = useNetworkStore((s) => s.bannerVisible);
+  const bannerMessage = useNetworkStore((s) => s.bannerMessage);
+  const bannerType = useNetworkStore((s) => s.bannerType);
 
-export function OfflineBanner({ isOffline }: OfflineBannerProps) {
-  if (!isOffline) return null;
+  if (!bannerVisible) return null;
+
+  const bgColor = bannerType === 'offline' ? '#DC2626' : bannerType === 'syncing' ? '#3B82F6' : bannerType === 'success' ? '#10B981' : '#F59E0B';
 
   return (
-    <View style={styles.banner}>
-      <Text style={styles.text}>⚡ No internet connection</Text>
+    <View style={[styles.banner, { backgroundColor: bgColor }]}>
+      <Text style={styles.text}>{bannerMessage}</Text>
     </View>
   );
 }
@@ -22,7 +21,6 @@ export function OfflineBanner({ isOffline }: OfflineBannerProps) {
 const styles = StyleSheet.create({
   banner: {
     height: 36,
-    backgroundColor: '#1F2937',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 9999,

@@ -43,5 +43,26 @@ export function initDB(): void {
       nextRetryAt TEXT,
       FOREIGN KEY(inspectionLocalId) REFERENCES inspections(localId)
     );
+
+    CREATE TABLE IF NOT EXISTS assignments_cache (
+      assignmentId TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      schemaSnapshot TEXT,
+      pendingAcceptance INTEGER DEFAULT 0,
+      updatedAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS assignment_actions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      assignmentId TEXT NOT NULL,
+      action TEXT NOT NULL,
+      payload TEXT,
+      queuedAt TEXT NOT NULL,
+      attemptCount INTEGER DEFAULT 0,
+      lastAttemptAt TEXT,
+      lastError TEXT,
+      nextRetryAt TEXT,
+      UNIQUE(assignmentId, action)
+    );
   `);
 }

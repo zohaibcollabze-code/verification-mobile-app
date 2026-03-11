@@ -4,21 +4,50 @@ import { useColors } from '@/constants/colors';
 import { StatusBadge } from '@/components/ui/Badge';
 import type { RequestModel } from '@/services/api/types/requestTypes';
 import { formatDate } from '@/utils/formatters';
+import { Button } from '@/components/ui/Button';
 
 interface AssignmentCardProps {
   assignment: RequestModel;
   onPress: (id: string) => void;
   hasDraft?: boolean;
+  syncStatus?: 'none' | 'pending' | 'syncing' | 'conflict';
+  onSyncPress?: () => void;
+  onConflictPress?: () => void;
 }
 
 /**
  * AssignmentCard (JobCard) — The flagship surface.
  * Glassmorphism + Gold Accents + Typography Focus.
  */
-export function AssignmentCard({ assignment, onPress, hasDraft }: AssignmentCardProps) {
+const SYNC_BADGE_META = {
+  pending: {
+    label: '⏳ Pending Sync',
+    bg: 'rgba(251, 191, 36, 0.15)',
+    border: '#FBBF24',
+    text: '#92400E',
+  },
+  syncing: {
+    label: '🔄 Syncing…',
+    bg: 'rgba(59, 130, 246, 0.15)',
+    border: '#3B82F6',
+    text: '#1D4ED8',
+  },
+  conflict: {
+    label: '⚠️ Conflict',
+    bg: 'rgba(248, 113, 113, 0.15)',
+    border: '#EF4444',
+    text: '#B91C1C',
+  },
+} as const;
+
+type SyncBadgeKey = keyof typeof SYNC_BADGE_META;
+
+export function AssignmentCard({ assignment, onPress, hasDraft, syncStatus = 'none', onSyncPress, onConflictPress }: AssignmentCardProps) {
   const Colors = useColors();
   const statusColor = (Colors.statusBadge as any)[assignment.status]?.text ?? Colors.primary;
   const displayDate = assignment.dueDate || assignment.thisInspectionDate || assignment.createdAt;
+  const syncMeta = syncStatus !== 'none' ? SYNC_BADGE_META[syncStatus as SyncBadgeKey] : null;
+  const SyncBadgeWrapper = syncStatus === 'conflict' && onConflictPress ? Pressable : View;
 
   return (
     <Pressable
@@ -30,11 +59,22 @@ export function AssignmentCard({ assignment, onPress, hasDraft }: AssignmentCard
           <Text style={[styles.type, { color: Colors.textMuted }]}>
             {assignment.inspectionType?.toUpperCase() || 'INSPECTION'}
           </Text>
-          <Text style={[styles.title, { color: Colors.textAccent }]} numberOfLines={2}>
+          <Text style={[styles.title, { color: Colors.primary }]} numberOfLines={2}>
             {assignment.clientName}
           </Text>
         </View>
-        <StatusBadge status={assignment.status as any} />
+        <View style={styles.headerActions}>
+          <StatusBadge status={assignment.status as any} />
+          {syncMeta && (
+            <SyncBadgeWrapper
+              onPress={syncStatus === 'conflict' ? onConflictPress : undefined}
+              style={[styles.syncBadge, { backgroundColor: syncMeta.bg, borderColor: syncMeta.border }]}
+              hitSlop={syncStatus === 'conflict' ? 8 : undefined}
+            >
+              <Text style={[styles.syncBadgeText, { color: syncMeta.text }] }>{syncMeta.label}</Text>
+            </SyncBadgeWrapper>
+          )}
+        </View>
       </View>
 
       <View style={styles.details}>
@@ -55,14 +95,18 @@ export function AssignmentCard({ assignment, onPress, hasDraft }: AssignmentCard
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={[styles.idLabel, { color: Colors.textMuted }]}>REF ID</Text>
-          <Text style={[styles.idValue, { color: Colors.textAccent }]}>
+          <Text style={[styles.idValue, { color: Colors.primary }] }>
             #{assignment.referenceNumber}
           </Text>
         </View>
       </View>
 
+      {syncStatus === 'pending' && onSyncPress && (
+        <Button title="Sync Now" variant="outline" onPress={onSyncPress} style={styles.syncButton} textStyle={{ color: Colors.primary }} />
+      )}
+
       {hasDraft && (
-        <View style={[styles.draftBadge, { backgroundColor: Colors.accentBlue }]}>
+        <View style={[styles.draftBadge, { backgroundColor: Colors.primary }] }>
           <Text style={styles.draftText}>DRAFT</Text>
         </View>
       )}
@@ -81,6 +125,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  headerActions: {
+    alignItems: 'flex-end',
+    gap: 6,
   },
   type: {
     fontSize: 10,
@@ -133,6 +181,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  syncBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  syncBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   draftBadge: {
     position: 'absolute',
     top: 0,
@@ -146,5 +204,10 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '800',
     color: '#FFF',
+  },
+  syncButton: {
+    marginTop: 12,
+    alignSelf: 'stretch',
+    borderWidth: 1.5,
   },
 });

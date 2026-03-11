@@ -4,6 +4,7 @@ import { useNetworkStore } from '@/stores/networkStore';
 import * as InspectionsDB from '@/services/db/inspections';
 import * as PhotosDB from '@/services/db/photos';
 import * as SyncQueueDB from '@/services/db/syncQueue';
+import * as AssignmentActionsDB from '@/services/db/assignments';
 import type { InspectionPhoto } from '@/services/db/types';
 import { deleteLocalPhoto } from '@/services/photos/photoService';
 
@@ -23,8 +24,16 @@ export async function runSync(): Promise<void> {
   let allSucceeded = true;
 
   try {
+    const assignmentActions = AssignmentActionsDB.getQueuedActions();
+    for (const action of assignmentActions) {
+      const success = await syncAssignmentAction(action);
+      if (!success) {
+        allSucceeded = false;
+      }
+    }
+
     const items = SyncQueueDB.getDueItems();
-    if (!items.length) {
+    if (!items.length && !assignmentActions.length) {
       networkState.setSyncStatus('idle');
       return;
     }
@@ -144,6 +153,39 @@ async function uploadSinglePhoto(photo: InspectionPhoto): Promise<boolean> {
   } catch (error) {
     console.warn('[SyncEngine] Photo upload failed', error);
     PhotosDB.markPhotoFailed(photo.localId);
+    return false;
+  }
+}
+
+async function syncAssignmentAction(action: any): Promise<boolean> {
+  try {
+    const endpoint = action.action === 'accept' 
+      ? `/requests/${action.assignmentId}/accept`
+      : `/requests/${action.assignmentId}/reject`;
+    
+    const payload = action.payload ? JSON.parse(action.payload) : {};
+    
+    const response = await apiClient.post(endpoint, payload);
+    
+    if (response.status === 200 || response.status === 201) {
+      AssignmentActionsDB.removeAssignmentAction(action.assignmentId, action.action);
+      AssignmentActionsDB.setPendingAcceptance(action.assignmentId, false);
+      return true;
+    }
+    
+    return false;
+  } catch (error: any) {
+    const status = error?.response?.status;
+    if (status === 404 || status === 409) {
+      AssignmentActionsDB.removeAssignmentAction(action.assignmentId, action.action);
+      return false;
+    }
+    
+    AssignmentActionsDB.recordAssignmentActionAttempt(
+      action.assignmentId,
+      action.action,
+      error?.message || 'Action sync failed'
+    );
     return false;
   }
 }

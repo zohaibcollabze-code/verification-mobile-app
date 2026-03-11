@@ -30,6 +30,7 @@ import { RequestsScreen } from '../screens/RequestsScreen';
 import SuccessScreen from '../screens/inspection/SuccessScreen';
 import ApiErrorBoundary from '../components/ApiErrorBoundary';
 import { navigationRef, flushPendingNavigation } from '@/navigation/navigationRef';
+import { ConflictResolutionScreen } from '@/screens/sync/ConflictResolutionScreen';
 
 // Wrap RequestsScreen with ApiErrorBoundary for crash recovery
 function RequestsScreenWithBoundary() {
@@ -185,6 +186,7 @@ export function AppNavigator() {
             <RootStack.Screen name="InspectionForm" component={InspectionNavigator} />
             <RootStack.Screen name="Requests" component={RequestsScreenWithBoundary} />
             <RootStack.Screen name="Success" component={SuccessScreen as any} />
+            <RootStack.Screen name="ConflictResolution" component={ConflictResolutionScreen} />
           </RootStack.Group>
         )}
       </RootStack.Navigator>

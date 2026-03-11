@@ -8,19 +8,37 @@ import type { RequestModel } from '@/services/api/types/requestTypes';
 import type { FindingsFieldSchema } from '@/types/schema.types';
 import { useNetworkStore } from '@/stores/networkStore';
 import { runSync } from '@/services/sync/syncEngine';
+import { deleteLocalPhoto } from '@/services/photos/photoService';
+
+interface GPSData {
+  latitude: number;
+  longitude: number;
+  isMocked?: boolean;
+  rawCoordinates?: {
+    latitude: number;
+    longitude: number;
+  };
+}
 
 interface InspectionStoreState {
   activeInspection: InspectionRecord | null;
   photos: InspectionPhoto[];
+  assignment: RequestModel | null;
+  gps: GPSData | null;
   isLoading: boolean;
   error: string | null;
 
   initDraft: (assignmentId: string, inspectorId: string, schema: FindingsFieldSchema[], assignment?: RequestModel | null) => Promise<void>;
   updateField: (fieldId: string, value: any) => void;
   addPhoto: (fieldId: string, localUri: string) => void;
+  removePhoto: (photoLocalId: string) => void;
+  updatePhotoField: (photoLocalId: string, fieldId: string) => void;
+  setGPS: (gps: GPSData) => void;
   acceptInspection: () => void;
   submitInspection: () => void;
   clearActive: () => void;
+  getFormData: () => Record<string, any>;
+  getSchema: () => FindingsFieldSchema[];
 }
 
 function serializeFormData(data: Record<string, any>): string {
@@ -39,6 +57,8 @@ function parseFormData(record?: InspectionRecord | null): Record<string, any> {
 export const useInspectionStore = create<InspectionStoreState>((set, get) => ({
   activeInspection: null,
   photos: [],
+  assignment: null,
+  gps: null,
   isLoading: false,
   error: null,
 
@@ -67,7 +87,7 @@ export const useInspectionStore = create<InspectionStoreState>((set, get) => ({
       }
 
       const photos = PhotosDB.getPhotosByInspection(existing.localId);
-      set({ activeInspection: existing, photos, isLoading: false });
+      set({ activeInspection: existing, photos, assignment: assignment ?? null, gps: null, isLoading: false });
     } catch (error) {
       console.error('[InspectionStore] initDraft failed', error);
       set({ error: 'Failed to initialize inspection', isLoading: false });
@@ -123,7 +143,43 @@ export const useInspectionStore = create<InspectionStoreState>((set, get) => ({
     }
   },
 
+  removePhoto: (photoLocalId) => {
+    const state = get();
+    if (!state.activeInspection) return;
+    const photo = state.photos.find(p => p.localId === photoLocalId);
+    if (photo?.localUri) {
+      deleteLocalPhoto(photo.localUri).catch(err => console.warn('[InspectionStore] Failed to delete local photo', err));
+    }
+    PhotosDB.deletePhoto(photoLocalId);
+    set({ photos: state.photos.filter(p => p.localId !== photoLocalId) });
+  },
+
+  updatePhotoField: (photoLocalId, fieldId) => {
+    const state = get();
+    PhotosDB.updatePhotoField(photoLocalId, fieldId);
+    set({ photos: state.photos.map(p => p.localId === photoLocalId ? { ...p, fieldId } : p) });
+  },
+
+  setGPS: (gps) => {
+    set({ gps });
+  },
+
   clearActive: () => {
-    set({ activeInspection: null, photos: [] });
+    set({ activeInspection: null, photos: [], assignment: null, gps: null });
+  },
+
+  getFormData: () => {
+    const state = get();
+    return parseFormData(state.activeInspection);
+  },
+
+  getSchema: () => {
+    const state = get();
+    if (!state.activeInspection?.schemaSnapshot) return [];
+    try {
+      return JSON.parse(state.activeInspection.schemaSnapshot);
+    } catch {
+      return [];
+    }
   },
 }));

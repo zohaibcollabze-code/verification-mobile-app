@@ -1,12 +1,11 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Image, Dimensions, StyleSheet, Modal, Platform, ActionSheetIOS, Alert } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '@/constants/colors';
 import { useInspectionStore } from '@/stores/inspectionStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { BottomSheetPicker } from '@/components/ui/BottomSheetPicker';
-import type { PhotoItem } from '@/types/store.types';
+import { capturePhoto, selectFromGallery } from '@/services/photos/photoService';
 
 interface Props {
   onNext: () => void;
@@ -19,30 +18,30 @@ const GRID_SIZE = (width - 48 - 12) / 3; // 48 is total padding (24*2), 12 is ga
 
 export default function Step4Photos({ onNext, onBack, requestId }: Props) {
   const colors = useColors();
-  const storedDraft = useInspectionStore((s) => s.drafts[requestId]);
+  const activeInspection = useInspectionStore((s) => s.activeInspection);
+  const photos = useInspectionStore((s) => s.photos);
+  const getSchema = useInspectionStore((s) => s.getSchema);
   const addPhoto = useInspectionStore((s) => s.addPhoto);
   const removePhoto = useInspectionStore((s) => s.removePhoto);
-  const updatePhoto = useInspectionStore((s) => s.updatePhoto);
+  const updatePhotoField = useInspectionStore((s) => s.updatePhotoField);
 
-  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [selectedPhotoLocalId, setSelectedPhotoLocalId] = useState<string | null>(null);
   const [isUploadModalVisible, setUploadModalVisible] = useState(false);
-  const [editPhotoId, setEditPhotoId] = useState<string | null>(null);
   const [fieldPickerVisible, setFieldPickerVisible] = useState(false);
 
-  const photos = useMemo(() => storedDraft?.photos || [], [storedDraft]);
   const selectedPhoto = useMemo(() =>
-    photos.find(p => p.id === selectedPhotoId),
-    [photos, selectedPhotoId]);
+    photos.find(p => p.localId === selectedPhotoLocalId),
+    [photos, selectedPhotoLocalId]);
 
   const schemaFields = useMemo(() => {
-    const schema = storedDraft?.schemaSnapshot || [];
+    const schema = getSchema();
     return schema
-      .filter((field) => field.photo === true || (field.photo === undefined && field.requires_photo === true))
+      .filter((field) => field.photo === true)
       .map((field) => ({
         label: field.label || field.key,
         value: field.key,
       }));
-  }, [storedDraft?.schemaSnapshot]);
+  }, [getSchema, activeInspection?.schemaSnapshot]);
 
   const getFieldLabel = useCallback((fieldKey: string | null) => {
     const field = schemaFields.find(f => f.value === fieldKey);
@@ -299,69 +298,35 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
     },
   }), [colors]);
 
-  const processMediaResult = (result: ImagePicker.ImagePickerResult, existingPhotoId?: string) => {
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const asset = result.assets[0];
-      const isVideo = asset.type === 'video';
-      if (existingPhotoId) {
-        updatePhoto(requestId, existingPhotoId, {
-          localUri: asset.uri,
-          fileSizeBytes: asset.fileSize || 0,
-          mimeType: isVideo ? 'video/mp4' : 'image/jpeg',
-        });
-      } else {
-        const newId = `media_${Date.now()}`;
-        addPhoto(requestId, {
-          id: newId,
-          localUri: asset.uri,  
-          attachmentId: null,
-          s3Key: null,
-          caption: '',
-          remarks: '',
-          fieldKey: null,
-          uploadStatus: 'pending',
-          uploadProgress: 0,
-          mimeType: isVideo ? 'video/mp4' : 'image/jpeg',
-          fileSizeBytes: asset.fileSize || 0,
-        });
-        setSelectedPhotoId(newId);
-      }
+
+  const handleCapture = async () => {
+    if (!activeInspection) return;
+    setUploadModalVisible(false);
+    const localUri = await capturePhoto(activeInspection.localId, 'general');
+    if (localUri) {
+      addPhoto('general', localUri);
     }
   };
 
-  const handleCapture = async () => {
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
-    processMediaResult(result, editPhotoId || undefined);
-    setUploadModalVisible(false);
-    setEditPhotoId(null);
-  };
-
-  const handleRecordVideo = async () => {
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['videos'],
-      videoMaxDuration: 120,
-    });
-    processMediaResult(result, editPhotoId || undefined);
-    setUploadModalVisible(false);
-    setEditPhotoId(null);
-  };
-
   const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
-      quality: 0.8,
-    });
-    processMediaResult(result, editPhotoId || undefined);
+    if (!activeInspection) return;
     setUploadModalVisible(false);
-    setEditPhotoId(null);
+    const localUri = await selectFromGallery(activeInspection.localId, 'general');
+    if (localUri) {
+      addPhoto('general', localUri);
+    }
   };
 
-  const openUploadOptions = (photoId?: string) => {
-    setEditPhotoId(photoId || null);
-    setUploadModalVisible(true);
+  const handleDeletePhoto = (photoLocalId: string) => {
+    Alert.alert('Delete Photo', 'Are you sure you want to delete this photo?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => {
+        removePhoto(photoLocalId);
+        if (selectedPhotoLocalId === photoLocalId) {
+          setSelectedPhotoLocalId(null);
+        }
+      }}
+    ]);
   };
 
   return (
@@ -377,27 +342,21 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
 
         {/* Photo Grid */}
         <View style={styles.grid}>
-          <Pressable onPress={() => openUploadOptions()} style={styles.addCard}>
+          <Pressable onPress={() => setUploadModalVisible(true)} style={styles.addCard}>
             <Text style={styles.addIcon}>📷</Text>
             <Text style={styles.addText}>Add Media</Text>
           </Pressable>
 
           {photos.map((photo) => {
-            const isActive = selectedPhotoId === photo.id;
-            const isVideo = photo.mimeType?.startsWith('video');
+            const isActive = selectedPhotoLocalId === photo.localId;
             return (
               <Pressable
-                key={photo.id}
-                onPress={() => setSelectedPhotoId(isActive ? null : photo.id)}
+                key={photo.localId}
+                onPress={() => setSelectedPhotoLocalId(isActive ? null : photo.localId)}
                 style={[styles.photoCard, isActive && styles.photoCardActive]}
               >
-                <Image source={{ uri: photo.localUri }} style={styles.thumbnail} />
-                {isVideo && (
-                  <View style={styles.mediaOverlay}>
-                    <Text style={styles.playSmall}>▶</Text>
-                  </View>
-                )}
-                {photo.uploadStatus === 'uploading' && (
+                <Image source={{ uri: photo.localUri || '' }} style={styles.thumbnail} />
+                {photo.uploadStatus === 'pending' && (
                   <View style={styles.mediaOverlay}>
                     <Text style={styles.uploadText}>Uploading...</Text>
                   </View>
@@ -407,67 +366,31 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
           })}
         </View>
 
-        {/* Media Detail Card */}
         {selectedPhoto && (
           <View style={styles.detailCard}>
-            <Text style={styles.detailTitle}>MEDIA SELECTION</Text>
-
+            <Text style={styles.detailTitle}>PHOTO DETAILS</Text>
             <View style={styles.previewWrapper}>
-              {selectedPhoto.mimeType?.startsWith('video') ? (
-                <View style={styles.videoPlaceholder}>
-                  <Text style={{ fontSize: 48 }}>▶</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>VIDEO RECORDING</Text>
-                </View>
-              ) : (
-                <Image source={{ uri: selectedPhoto.localUri }} style={styles.previewImage} />
-              )}
+              <Image source={{ uri: selectedPhoto.localUri || '' }} style={styles.previewImage} />
               <View style={styles.previewOverlays}>
-                <Pressable onPress={() => openUploadOptions(selectedPhoto.id)} style={styles.overlayBtn}>
-                  <Text style={styles.btnText}>✎</Text>
-                </Pressable>
                 <Pressable
-                  onPress={() => {
-                    removePhoto(requestId, selectedPhoto.id);
-                    setSelectedPhotoId(null);
-                  }}
+                  onPress={() => handleDeletePhoto(selectedPhoto.localId)}
                   style={[styles.overlayBtn, styles.deleteBtn]}
                 >
                   <Text style={styles.btnText}>🗑</Text>
                 </Pressable>
               </View>
             </View>
-
             <View style={{ marginBottom: 16 }}>
               <Text style={styles.fieldLabel}>RELATED FIELD</Text>
               <Pressable onPress={() => setFieldPickerVisible(true)} style={styles.fieldSelector}>
-                <Text style={styles.fieldValue}>{getFieldLabel(selectedPhoto.fieldKey)}</Text>
+                <Text style={styles.fieldValue}>{getFieldLabel(selectedPhoto.fieldId) || 'General'}</Text>
                 <Text style={styles.fieldArrow}>▼</Text>
               </Pressable>
-              <Text style={styles.helperText}>
-                Select which inspection field this image relates to, or leave as "General Evidence".
-              </Text>
             </View>
-
-            <Input
-              label="Evidence Title"
-              value={selectedPhoto.caption || ''}
-              onChangeText={(val) => updatePhoto(requestId, selectedPhoto.id, { caption: val })}
-              placeholder="e.g. Front View of Machinery"
-            />
-
-            <Input
-              label="Observations"
-              value={selectedPhoto.remarks || ''}
-              onChangeText={(val) => updatePhoto(requestId, selectedPhoto.id, { remarks: val })}
-              placeholder="Detail any technical observations seen here..."
-              multiline
-              inputHeight={80}
-            />
           </View>
         )}
       </ScrollView>
 
-      {/* Upload Modal */}
       <Modal visible={isUploadModalVisible} transparent animationType="slide">
         <Pressable style={styles.modalOverlay} onPress={() => setUploadModalVisible(false)}>
           <View style={styles.modalSheet}>
@@ -476,12 +399,6 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
               <Pressable onPress={handleCapture} style={styles.option}>
                 <View style={styles.optionCircle}><Text style={{ fontSize: 26 }}>📸</Text></View>
                 <Text style={styles.optionText}>Photo</Text>
-              </Pressable>
-              <Pressable onPress={handleRecordVideo} style={styles.option}>
-                <View style={[styles.optionCircle, { backgroundColor: 'rgba(239, 68, 68, 0.05)', borderColor: 'rgba(239, 68, 68, 0.2)' }]}>
-                  <Text style={{ fontSize: 26 }}>🎥</Text>
-                </View>
-                <Text style={styles.optionText}>Video</Text>
               </Pressable>
               <Pressable onPress={handlePickImage} style={styles.option}>
                 <View style={styles.optionCircle}><Text style={{ fontSize: 26 }}>🖼️</Text></View>
@@ -496,13 +413,11 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
       <BottomSheetPicker
         visible={fieldPickerVisible}
         title="Select Related Field"
-        options={[
-          ...schemaFields,
-        ]}
-        selected={selectedPhoto?.fieldKey}
+        options={schemaFields}
+        selected={selectedPhoto?.fieldId || null}
         onSelect={(value) => {
           if (selectedPhoto) {
-            updatePhoto(requestId, selectedPhoto.id, { fieldKey: value });
+            updatePhotoField(selectedPhoto.localId, value);
           }
           setFieldPickerVisible(false);
         }}

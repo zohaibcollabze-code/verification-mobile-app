@@ -2,16 +2,21 @@
  * MPVP — App Root
  * Wraps the application with all required providers.
  */
+import 'react-native-get-random-values';
 import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { ToastProvider } from '@/components/ui/Toast';
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { useAuthStore } from './src/stores/authStore';
+import { initDB } from '@/services/db/index';
+import { startNetworkListener } from '@/services/network/networkListener';
+import { runSync } from '@/services/sync/syncEngine';
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize);
@@ -20,7 +25,31 @@ export default function App() {
   });
 
   useEffect(() => {
-    initialize();
+    async function bootstrap() {
+      try {
+        initDB();
+        await ImagePicker.requestCameraPermissionsAsync();
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+        startNetworkListener(() => {
+          runSync().catch(err => console.warn('[App] Connectivity restored sync failed', err));
+        });
+        const syncInterval = setInterval(() => {
+          runSync().catch(err => console.warn('[App] Periodic sync failed', err));
+        }, 5 * 60 * 1000);
+        await initialize();
+        return () => clearInterval(syncInterval);
+      } catch (error) {
+        console.error('[App] Bootstrap failed', error);
+      }
+    }
+    const cleanupPromise = bootstrap();
+    return () => {
+      cleanupPromise.then((cleanup) => {
+        if (typeof cleanup === 'function') {
+          cleanup();
+        }
+      }).catch(() => {});
+    };
   }, [initialize]);
 
   // AppNavigator renders the premium SplashScreen when isLoading is true.
@@ -41,7 +70,7 @@ export default function App() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <ToastProvider>
-          <OfflineBanner isOffline={false} />
+          <OfflineBanner />
           <AppNavigator />
         </ToastProvider>
       </SafeAreaProvider>

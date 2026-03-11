@@ -35,52 +35,47 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
       text: colors.warning,
     },
   }), [colors.success, colors.successSoft, colors.danger, colors.dangerSoft, colors.warning, colors.warningSoft]);
-  const storedDraft = useInspectionStore((s) => s.drafts[requestId]);
-  const updateStep3 = useInspectionStore((s) => s.updateStep3);
+  const activeInspection = useInspectionStore((s) => s.activeInspection);
+  const assignment = useInspectionStore((s) => s.assignment);
+  const getFormData = useInspectionStore((s) => s.getFormData);
+  const getSchema = useInspectionStore((s) => s.getSchema);
+  const updateField = useInspectionStore((s) => s.updateField);
 
-  // §7: Dynamic schema snapshot from draft (initialized in previous steps)
-  const schema = useMemo(() =>
-    storedDraft?.schemaSnapshot || [],
-    [storedDraft?.schemaSnapshot]);
-
-  const step3 = storedDraft?.step3 || {
-    findingData: {},
-    overallStatus: 'satisfactory' as InspectionOverallStatus,
-    remarks: '',
-  };
+  const schema = useMemo(() => getSchema(), [getSchema, activeInspection?.schemaSnapshot]);
+  const formData = useMemo(() => getFormData(), [getFormData, activeInspection?.formData]);
+  const remarks = formData.remarks || '';
+  const overallStatus = (formData.overall_inspection_status as InspectionOverallStatus) || 'satisfactory';
 
   const handleFieldChange = useCallback((key: string, val: any) => {
-    updateStep3(requestId, {
-      findingData: { [key]: val },
-    });
+    updateField(key, val);
 
     // AUTO-CALCULATION LOGIC: Murabaha Final Price
-    // AUTO-CALCULATION LOGIC: Murabaha Final Price
-    const assignmentCode = storedDraft?.assignment?.contractType?.code;
+    const assignmentCode = assignment?.contractType?.code;
     if (assignmentCode === 'MUR') {
-      const data = { ...step3.findingData, [key]: val };
+      const data = { ...formData, [key]: val };
       const cost = Number(data.purchase_cost || 0);
       const margin = Number(data.profit_margin || 0);
       if (key === 'purchase_cost' || key === 'profit_margin') {
         const final = cost + (cost * margin / 100);
-        updateStep3(requestId, { findingData: { final_price: final } });
+        updateField('final_price', final);
       }
     }
-  }, [requestId, updateStep3, storedDraft?.assignment, step3.findingData]);
+  }, [updateField, assignment, formData]);
 
   const handleStatusSelect = useCallback((status: InspectionOverallStatus) => {
-    updateStep3(requestId, { findingData: { 'overall_inspection_status': status } });
-  }, [requestId, updateStep3]);
+    updateField('overall_inspection_status', status);
+  }, [updateField]);
 
-  // §7: Filter schema for conditional visibility
+  // §7: Filter schema for conditional visibility and exclude photo fields
   const visibleSchema = useMemo(() => {
     return schema.filter((field) => {
-      if (field.key === 'transfer_terms' && storedDraft?.assignment?.contractType?.code === 'IJA') {
-        return !!step3.findingData.ownership_transfer_clause;
+      if (field.photo === true) return false;
+      if (field.key === 'transfer_terms' && assignment?.contractType?.code === 'IJA') {
+        return !!formData.ownership_transfer_clause;
       }
       return true;
     });
-  }, [schema, step3.findingData, storedDraft?.assignment?.contractType?.code]);
+  }, [schema, formData, assignment]);
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -241,9 +236,7 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
     nextBtn: { flex: 2 },
   }), [colors]);
 
-  if (!storedDraft?.assignment) return null;
-
-  const assignment = storedDraft.assignment;
+  if (!assignment) return null;
 
   return (
     <View style={styles.container}>
@@ -278,7 +271,7 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
             >
               <DynamicField
                 field={field}
-                value={step3.findingData[field.key]}
+                value={formData[field.key]}
                 onChange={(val) => handleFieldChange(field.key, val)}
               />
             </View>
@@ -292,8 +285,8 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
         <View style={styles.remarksContainer}>
           <Input
             placeholder="Detail any critical observations or remediation steps..."
-            value={step3.remarks}
-            onChangeText={(val) => updateStep3(requestId, { remarks: val })}
+            value={remarks}
+            onChangeText={(val) => updateField('remarks', val)}
             multiline
             inputHeight={160}
             textAlignVertical="top"

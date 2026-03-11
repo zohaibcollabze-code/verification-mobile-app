@@ -75,3 +75,32 @@ export function removeFromQueue(inspectionLocalId: string): void {
     throw error;
   }
 }
+
+export function getPendingCountByAssignment(assignmentId: string): number {
+  try {
+    const row = db.getFirstSync<{ count: number }>(
+      `SELECT COUNT(*) as count
+       FROM sync_queue sq
+       JOIN inspections i ON i.localId = sq.inspectionLocalId
+       WHERE i.assignmentId = ?;`,
+      [assignmentId],
+    );
+    return row?.count ?? 0;
+  } catch (error) {
+    console.error('[DB] Failed to count pending sync items', error);
+    throw error;
+  }
+}
+
+export function isInspectionQueued(localId: string): boolean {
+  try {
+    const row = db.getFirstSync<{ present: number }>(
+      `SELECT 1 as present FROM sync_queue WHERE inspectionLocalId = ? LIMIT 1;`,
+      [localId],
+    );
+    return !!row;
+  } catch (error) {
+    console.error('[DB] Failed to check inspection queue status', error);
+    throw error;
+  }
+}

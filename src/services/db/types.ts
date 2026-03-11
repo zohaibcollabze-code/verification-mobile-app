@@ -33,3 +33,23 @@ export interface SyncQueueItem {
   lastError: string | null;
   nextRetryAt: string | null;
 }
+
+export interface AssignmentCacheRecord {
+  assignmentId: string;
+  payload: string;
+  schemaSnapshot: string | null;
+  pendingAcceptance: number;
+  updatedAt: string;
+}
+
+export interface AssignmentActionRecord {
+  id: number | null;
+  assignmentId: string;
+  action: 'accept' | 'reject';
+  payload: string | null;
+  queuedAt: string;
+  attemptCount: number;
+  lastAttemptAt: string | null;
+  lastError: string | null;
+  nextRetryAt: string | null;
+}

@@ -10,6 +10,11 @@ import { GeometricIcon } from '@/components/ui/GeometricIcon';
 import { useJobs } from '@/hooks/useJobs';
 import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useToast } from '@/components/ui/Toast';
+import { useNetworkStore } from '@/stores/networkStore';
+import * as InspectionsDB from '@/services/db/inspections';
+import * as SyncQueueDB from '@/services/db/syncQueue';
+import { runSync } from '@/services/sync/syncEngine';
 import type { RequestStatus } from '@/services/api/types/requestTypes';
 
 type FilterOption = 'ALL' | 'assigned' | 'in_progress' | 'submitted' | 'returned';
@@ -26,6 +31,8 @@ export function AssignmentsScreen() {
   const Colors = useColors();
   const { themeMode } = useThemeStore();
   const { jobs, loading: jobsLoading, fetchJobs } = useJobs();
+  const toast = useToast();
+  const globalSyncStatus = useNetworkStore((s) => s.syncStatus);
 
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterOption>('ALL');
@@ -66,6 +73,34 @@ export function AssignmentsScreen() {
     return results;
   }, [filter, searchText, jobs]);
 
+  const assignmentSyncMap = useMemo(() => {
+    const map = new Map<string, { status: 'none' | 'pending' | 'syncing' | 'conflict'; localId?: string }>();
+    filteredAssignments.forEach((assignment) => {
+      const inspection = InspectionsDB.getByAssignmentId(assignment.id);
+      let status: 'none' | 'pending' | 'syncing' | 'conflict' = 'none';
+      if (inspection) {
+        if (inspection.syncStatus === 'conflict') {
+          status = 'conflict';
+        } else {
+          const queued = SyncQueueDB.isInspectionQueued(inspection.localId) || inspection.syncStatus === 'pending_upload';
+          if (queued && globalSyncStatus === 'syncing') {
+            status = 'syncing';
+          } else if (queued) {
+            status = 'pending';
+          }
+        }
+        map.set(assignment.id, { status, localId: inspection.localId });
+      } else {
+        const pendingCount = SyncQueueDB.getPendingCountByAssignment(assignment.id);
+        if (pendingCount > 0) {
+          status = globalSyncStatus === 'syncing' ? 'syncing' : 'pending';
+        }
+        map.set(assignment.id, { status });
+      }
+    });
+    return map;
+  }, [filteredAssignments, globalSyncStatus]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchJobs({ page: 1, limit: 100 });
@@ -78,6 +113,20 @@ export function AssignmentsScreen() {
     },
     [navigation],
   );
+
+  const handleSyncPress = useCallback(() => {
+    runSync()
+      .then(() => toast.showToast('info', 'Sync started'))
+      .catch((err) => {
+        console.warn('[Assignments] manual sync failed', err);
+        toast.showToast('error', 'Failed to start sync');
+      });
+  }, [toast]);
+
+  const handleConflictPress = useCallback((localId?: string) => {
+    if (!localId) return;
+    navigation.navigate('ConflictResolution', { inspectionLocalId: localId });
+  }, [navigation]);
 
   if (jobsLoading && !refreshing) {
     return (
@@ -170,9 +219,18 @@ export function AssignmentsScreen() {
 
       <FlatList
         data={filteredAssignments}
-        renderItem={({ item }) => (
-          <AssignmentCard assignment={item as any} onPress={handleCardPress} />
-        )}
+        renderItem={({ item }) => {
+          const syncMeta = assignmentSyncMap.get(item.id) ?? { status: 'none' };
+          return (
+            <AssignmentCard
+              assignment={item as any}
+              onPress={handleCardPress}
+              syncStatus={syncMeta.status}
+              onSyncPress={syncMeta.status === 'pending' ? handleSyncPress : undefined}
+              onConflictPress={syncMeta.status === 'conflict' ? () => handleConflictPress(syncMeta.localId) : undefined}
+            />
+          );
+        }}
         keyExtractor={(item, index) => `${item.id}-${index}`}
         contentContainerStyle={[styles.listContent, { paddingBottom: 100 + insets.bottom }]}
         refreshControl={

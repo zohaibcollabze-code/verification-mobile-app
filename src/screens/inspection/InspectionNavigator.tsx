@@ -9,6 +9,9 @@ import { GeometricIcon } from '@/components/ui/GeometricIcon';
 import { jobsService } from '@/services/jobs/jobsService';
 import { ErrorHandler } from '@/utils/errorHandler';
 import { findingsService } from '@/services/findings/findingsService';
+import * as AssignmentCacheDB from '@/services/db/assignments';
+import { useNetworkStore } from '@/stores/networkStore';
+import { useAuthStore } from '@/stores/authStore';
 
 // Steps
 import Step3Findings from './Step3Findings';
@@ -186,51 +189,67 @@ export default function InspectionNavigator() {
     },
   }), [colors]);
 
-  // Use Centralized Zustand Store
-  const currentRequestId = useInspectionStore((s) => s.currentRequestId);
-  const drafts = useInspectionStore((s) => s.drafts);
-  const setCurrentRequestId = useInspectionStore((s) => s.setCurrentRequestId);
+  const activeInspection = useInspectionStore((s) => s.activeInspection);
+  const assignment = useInspectionStore((s) => s.assignment);
+  const initDraft = useInspectionStore((s) => s.initDraft);
+  const getSchema = useInspectionStore((s) => s.getSchema);
+  const isLoading = useInspectionStore((s) => s.isLoading);
+  const isOnline = useNetworkStore((s) => s.isOnline);
+  const user = useAuthStore((s) => s.user);
 
-  // Local state for step navigation within the navigator
   const [activeStep, setActiveStep] = useState(1);
-
-  const draft = drafts[requestId];
-  const assignment = draft?.assignment;
-
-  // Logic to ensure current ID is set and schema is fetched
-  useEffect(() => {
-    if (requestId && requestId !== currentRequestId) {
-      setCurrentRequestId(requestId);
-    }
-  }, [requestId, currentRequestId, setCurrentRequestId]);
+  const [assignmentData, setAssignmentData] = useState<any>(null);
+  const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchSchema() {
-      // Guard: Only fetch if we don't have a snapshot AND the draft exists
-      // We check for length === 0, but we also want to avoid a loop if the API returns []
-      if (requestId && (!draft?.schemaSnapshot || draft.schemaSnapshot.length === 0)) {
-        try {
-          const schemaData = await jobsService.getFindingsSchema(requestId);
-          // If we already have an empty array and the API also returns an empty array, 
-          // do NOT update the store to avoid reference-change loops.
-          const newSchema = schemaData?.findingsSchema || [];
-          const currentSchema = draft?.schemaSnapshot || [];
+    async function loadInspection() {
+      if (!requestId || !user) return;
+      try {
+        const cached = AssignmentCacheDB.getAssignment(requestId);
+        let assignmentDetail = cached?.assignment;
+        let schema: any[] = [];
 
-          if (newSchema.length > 0 || currentSchema.length === 0) {
-            // Only update if there's actual data to add OR we are initializing for the first time
-            // To be even safer, we only update if they are actually different
-            if (JSON.stringify(newSchema) !== JSON.stringify(currentSchema)) {
-              useInspectionStore.getState().updateSchemaSnapshot(requestId, newSchema);
-            }
+        if (cached?.schemaSnapshot) {
+          try {
+            schema = JSON.parse(cached.schemaSnapshot);
+          } catch {
+            schema = [];
           }
-        } catch (err) {
-          ErrorHandler.logError('Failed to load findings schema', err);
         }
+
+        if (isOnline) {
+          try {
+            assignmentDetail = await jobsService.getJobDetail(requestId);
+            setAssignmentData(assignmentDetail);
+            const schemaData = await jobsService.getFindingsSchema(requestId);
+            schema = schemaData?.findingsSchema || [];
+            AssignmentCacheDB.saveAssignment(assignmentDetail);
+            AssignmentCacheDB.saveSchemaSnapshot(requestId, JSON.stringify(schema));
+          } catch (err) {
+            console.warn('[InspectionNavigator] Failed to fetch online data, using cache', err);
+          }
+        } else {
+          setAssignmentData(assignmentDetail);
+        }
+
+        if (!schema || schema.length === 0) {
+          setInitError('Schema not available. Please connect to the internet at least once.');
+          return;
+        }
+
+        if (!assignmentDetail) {
+          setInitError('Assignment data not available.');
+          return;
+        }
+
+        await initDraft(requestId, user.id, schema, assignmentDetail);
+      } catch (err) {
+        ErrorHandler.logError('Failed to load inspection', err);
+        setInitError('Failed to initialize inspection.');
       }
     }
-    fetchSchema();
-    // Using a more stable dependency: only re-run if requestId changes or if we explicitly need to check the snapshot
-  }, [requestId, Boolean(draft?.schemaSnapshot?.length)]);
+    loadInspection();
+  }, [requestId, user, isOnline]);
 
 
   // Handle Android hard-back button
@@ -278,7 +297,26 @@ export default function InspectionNavigator() {
     }
   };
 
-  if (!assignment) return null;
+  if (initError) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.header, Shadows.sm]}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={20}>
+            <GeometricIcon type="Back" size={24} color={colors.primary} />
+          </Pressable>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Initialization Error</Text>
+          </View>
+          <View style={{ width: 44 }} />
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Text style={{ color: colors.textMuted, fontSize: 16, textAlign: 'center' }}>{initError}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isLoading || !assignment) return null;
 
   return (
     <SafeAreaView style={styles.safeArea}>

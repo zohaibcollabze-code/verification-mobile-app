@@ -85,3 +85,29 @@ export function markPhotoFailed(localId: string): void {
     throw error;
   }
 }
+
+export function deletePhoto(localId: string): void {
+  try {
+    db.runSync(
+      `DELETE FROM inspection_photos WHERE localId = ?;`,
+      [localId],
+    );
+  } catch (error) {
+    console.error('[DB] Failed to delete photo', error);
+    throw error;
+  }
+}
+
+export function updatePhotoField(localId: string, fieldId: string): void {
+  try {
+    db.runSync(
+      `UPDATE inspection_photos
+       SET fieldId = ?
+       WHERE localId = ?;`,
+      [fieldId, localId],
+    );
+  } catch (error) {
+    console.error('[DB] Failed to update photo field', error);
+    throw error;
+  }
+}

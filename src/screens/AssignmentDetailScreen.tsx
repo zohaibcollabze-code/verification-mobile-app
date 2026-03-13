@@ -3,7 +3,7 @@
  * Shows full assignment details with status-driven CTAs.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl, Modal, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useColors } from '@/constants/colors';
@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/Button';
 import { formatDate } from '@/utils/formatters';
 import type { RequestModel } from '@/services/api/types/requestTypes';
 import { GeometricIcon } from '@/components/ui/GeometricIcon';
+import { WebView } from 'react-native-webview';
+import * as FileSystem from 'expo-file-system';
 
 import { useJobs } from '@/hooks/useJobs';
 import { useInspectionStore } from '@/stores/inspectionStore';
@@ -36,6 +38,9 @@ export function AssignmentDetailScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [cachedSchema, setCachedSchema] = useState<any[] | null>(null);
+  const [pdfExpanded, setPdfExpanded] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<{ id: string; title: string; url: string } | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -112,15 +117,45 @@ export function AssignmentDetailScreen() {
     }
   }, [assignment, user, navigation, initDraft]);
 
-  if (!assignment) {
-    return (
-      <View style={[styles.center, { backgroundColor: Colors.bgScreen }]}>
-        <Text style={[styles.errorText, { color: Colors.textMuted }]}>Assignment not found</Text>
-      </View>
-    );
-  }
+  const pdfOptions = useMemo(() => {
+    if (!assignment) return [];
+    const rawDocuments = ((assignment as any)?.documents ?? (assignment as any)?.pdfDocuments ?? []) as any[];
+    const flattened = Array.isArray(rawDocuments) ? rawDocuments : [];
+    const mappedFromArray = flattened
+      .map((entry, index) => {
+        if (!entry) return null;
+        if (typeof entry === 'string') {
+          return { id: `doc-${index}`, title: `Document ${index + 1}`, url: entry };
+        }
+        if (typeof entry === 'object' && entry.url) {
+          return {
+            id: entry.id ?? `doc-${index}`,
+            title: entry.title ?? entry.label ?? `Document ${index + 1}`,
+            url: entry.url,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean) as { id: string; title: string; url: string }[];
 
-  const getCTALabel = (): string | null => {
+    if (mappedFromArray.length > 0) {
+      return mappedFromArray;
+    }
+
+    const fallbackDocs: { id: string; title: string; url: string }[] = [];
+    const offerLetter = (assignment as any)?.offerLetterUrl ?? (assignment as any)?.fieldData?.offerLetterPdf;
+    if (offerLetter) {
+      fallbackDocs.push({ id: 'offer-letter', title: 'Offer Letter', url: offerLetter });
+    }
+    const inspectionPack = (assignment as any)?.inspectionPackUrl ?? (assignment as any)?.fieldData?.inspectionPackPdf;
+    if (inspectionPack) {
+      fallbackDocs.push({ id: 'inspection-pack', title: 'Inspection Checklist', url: inspectionPack });
+    }
+    return fallbackDocs;
+  }, [assignment]);
+
+  const ctaLabel = useMemo(() => {
+    if (!assignment) return null;
     const status = assignment.status?.toLowerCase();
     switch (status) {
       case 'pending':
@@ -137,9 +172,36 @@ export function AssignmentDetailScreen() {
       default:
         return null;
     }
-  };
+  }, [assignment]);
 
-  const ctaLabel = getCTALabel();
+  const handlePreview = useCallback((doc: { id: string; title: string; url: string }) => {
+    setPreviewDoc(doc);
+  }, []);
+
+  const handleDownload = useCallback(async (doc: { id: string; title: string; url: string }) => {
+    try {
+      setIsDownloading(true);
+      const fileName = doc.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'document';
+      const storageDir = ((FileSystem as any).documentDirectory ?? (FileSystem as any).cacheDirectory ?? '') as string;
+      const fileUri = `${storageDir}${fileName}_${Date.now()}.pdf`;
+      const downloadResumable = FileSystem.createDownloadResumable(doc.url, fileUri);
+      await downloadResumable.downloadAsync();
+      Alert.alert('Download complete', `Saved to ${fileUri}`);
+    } catch (error) {
+      console.warn('[AssignmentDetail] PDF download failed', error);
+      Alert.alert('Download failed', 'Unable to download the document. Please try again later.');
+    } finally {
+      setIsDownloading(false);
+    }
+  }, []);
+
+  if (!assignment) {
+    return (
+      <View style={[styles.center, { backgroundColor: Colors.bgScreen }]}>
+        <Text style={[styles.errorText, { color: Colors.textMuted }]}>Assignment not found</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: Colors.bgScreen }]}>
@@ -227,6 +289,47 @@ export function AssignmentDetailScreen() {
           </View>
         </View>
 
+        {/* PDF Dropdown */}
+        <View style={[styles.pdfSection, { borderColor: Colors.borderDefault, backgroundColor: Colors.bgCard }]}>
+          <Pressable style={styles.pdfHeader} onPress={() => setPdfExpanded((prev) => !prev)}>
+            <View>
+              <Text style={[styles.pdfTitle, { color: Colors.textPrimary }]}>Documents & PDFs</Text>
+              <Text style={[styles.pdfSubtitle, { color: Colors.textMuted }]}>Offer letters, inspection packs, contracts</Text>
+            </View>
+            <Text style={[styles.pdfChevron, { color: Colors.textSecondary }]}>{pdfExpanded ? '▴' : '▾'}</Text>
+          </Pressable>
+          {pdfExpanded && (
+            <View style={styles.pdfList}>
+              {pdfOptions.length === 0 ? (
+                <Text style={[styles.pdfEmptyText, { color: Colors.textMuted }]}>No documents available for this assignment.</Text>
+              ) : (
+                pdfOptions.map((doc) => (
+                  <View key={doc.id} style={[styles.pdfItem, { borderColor: Colors.borderDefault }]}> 
+                    <View style={styles.pdfItemInfo}>
+                      <View style={[styles.pdfBadge, { backgroundColor: Colors.primaryGlow }]}> 
+                        <Text style={[styles.pdfBadgeText, { color: Colors.primary }]}>PDF</Text>
+                      </View>
+                      <Text style={[styles.pdfItemTitle, { color: Colors.textPrimary }]}>{doc.title}</Text>
+                    </View>
+                    <View style={styles.pdfActions}>
+                      <Pressable onPress={() => handlePreview(doc)} style={[styles.pdfActionBtn, { borderColor: Colors.primary }]}> 
+                        <Text style={[styles.pdfActionText, { color: Colors.primary }]}>Preview</Text>
+                      </Pressable>
+                      <Pressable onPress={() => handleDownload(doc)} style={[styles.pdfActionBtn, { borderColor: Colors.textSecondary }]}> 
+                        {isDownloading ? (
+                          <ActivityIndicator size="small" color={Colors.textSecondary} />
+                        ) : (
+                          <Text style={[styles.pdfActionText, { color: Colors.textSecondary }]}>Download</Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+        </View>
+
         {/* Detailed Information Sections */}
         <View style={styles.section}>
           <Text style={[styles.sectionHeader, { color: Colors.textMuted }]}>LOCATION & CONTACT</Text>
@@ -253,6 +356,26 @@ export function AssignmentDetailScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Preview Modal */}
+      <Modal visible={!!previewDoc} animationType="slide" onRequestClose={() => setPreviewDoc(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bgScreen }}>
+          <View style={styles.previewHeader}>
+            <Pressable onPress={() => setPreviewDoc(null)} hitSlop={15}>
+              <GeometricIcon type="Close" size={24} color={Colors.textPrimary} />
+            </Pressable>
+            <Text style={[styles.previewTitle, { color: Colors.textPrimary }]}>{previewDoc?.title}</Text>
+            <View style={{ width: 24 }} />
+          </View>
+          {previewDoc?.url ? (
+            <WebView source={{ uri: previewDoc.url }} style={{ flex: 1 }} />
+          ) : (
+            <View style={[styles.center, { backgroundColor: Colors.bgScreen }]}>
+              <Text style={{ color: Colors.textMuted }}>Unable to load document.</Text>
+            </View>
+          )}
+        </SafeAreaView>
+      </Modal>
 
       {/* Primary CTA */}
       {ctaLabel && (
@@ -475,5 +598,90 @@ const styles = StyleSheet.create({
   timelineInlineValue: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  pdfSection: {
+    borderWidth: 1.5,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 24,
+  },
+  pdfHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pdfTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  pdfSubtitle: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  pdfChevron: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  pdfList: {
+    marginTop: 16,
+    gap: 14,
+  },
+  pdfItem: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    gap: 12,
+  },
+  pdfItemInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pdfBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pdfBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  pdfItemTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  pdfActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  pdfActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1.2,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  pdfActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  pdfEmptyText: {
+    fontSize: 13,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

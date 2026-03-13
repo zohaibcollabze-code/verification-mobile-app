@@ -4,6 +4,7 @@ import { RequestModel, PaginatedRequestResult } from '../services/api/types/requ
 import { ErrorHandler } from '../utils/errorHandler';
 import * as AssignmentCacheDB from '@/services/db/assignments';
 import { useNetworkStore } from '@/stores/networkStore';
+import { getInspectorStats, InspectorStatsResponse } from '@/services/inspectors/inspectorsService';
 
 const sanitizeJobs = (items: RequestModel[]) =>
   items.filter((job) => job.status?.toLowerCase() !== 'published');
@@ -50,6 +51,7 @@ export const useJobs = () => {
   const [jobs, setJobs] = useState<RequestModel[]>([]);
   const [jobDetail, setJobDetail] = useState<RequestModel | null>(null);
   const [jobSummary, setJobSummary] = useState<JobSummary>(defaultSummary);
+  const [stats, setStats] = useState<InspectorStatsResponse | null>(null);
   const isOnline = useNetworkStore((s) => s.isOnline);
 
   const fetchJobs = useCallback(async (params?: any): Promise<PaginatedRequestResult | null> => {
@@ -87,6 +89,16 @@ export const useJobs = () => {
       return null;
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const fetchInspectorStats = useCallback(async () => {
+    try {
+      const data = await getInspectorStats();
+      console.log('[InspectorStats] /inspectors/me/stats response:', data);
+      setStats(data);
+    } catch (err) {
+      ErrorHandler.logError('Failed to fetch inspector stats', err);
     }
   }, []);
 
@@ -162,11 +174,13 @@ export const useJobs = () => {
 
   return {
     loading,
+    stats,
     error,
     jobs,
     jobDetail,
     jobSummary,
     fetchJobs,
+    fetchInspectorStats,
     fetchJobDetail,
     acceptJob,
     rejectJob,

@@ -4,14 +4,12 @@ import { useColors } from '@/constants/colors';
 import { StatusBadge } from '@/components/ui/Badge';
 import type { RequestModel } from '@/services/api/types/requestTypes';
 import { formatDate } from '@/utils/formatters';
-import { Button } from '@/components/ui/Button';
 
 interface AssignmentCardProps {
   assignment: RequestModel;
   onPress: (id: string) => void;
   hasDraft?: boolean;
   syncStatus?: 'none' | 'pending' | 'syncing' | 'conflict';
-  onSyncPress?: () => void;
   onConflictPress?: () => void;
 }
 
@@ -20,12 +18,6 @@ interface AssignmentCardProps {
  * Glassmorphism + Gold Accents + Typography Focus.
  */
 const SYNC_BADGE_META = {
-  pending: {
-    label: '⏳ Pending Sync',
-    bg: 'rgba(251, 191, 36, 0.15)',
-    border: '#FBBF24',
-    text: '#92400E',
-  },
   syncing: {
     label: '🔄 Syncing…',
     bg: 'rgba(59, 130, 246, 0.15)',
@@ -42,7 +34,7 @@ const SYNC_BADGE_META = {
 
 type SyncBadgeKey = keyof typeof SYNC_BADGE_META;
 
-export function AssignmentCard({ assignment, onPress, hasDraft, syncStatus = 'none', onSyncPress, onConflictPress }: AssignmentCardProps) {
+export function AssignmentCard({ assignment, onPress, hasDraft, syncStatus = 'none', onConflictPress }: AssignmentCardProps) {
   const Colors = useColors();
   const statusColor = (Colors.statusBadge as any)[assignment.status]?.text ?? Colors.primary;
   const displayDate = assignment.dueDate || assignment.thisInspectionDate || assignment.createdAt;
@@ -59,7 +51,7 @@ export function AssignmentCard({ assignment, onPress, hasDraft, syncStatus = 'no
           <Text style={[styles.type, { color: Colors.textMuted }]}>
             {assignment.inspectionType?.toUpperCase() || 'INSPECTION'}
           </Text>
-          <Text style={[styles.title, { color: Colors.primary }]} numberOfLines={2}>
+          <Text style={[styles.title, { color: statusColor }]} numberOfLines={2}>
             {assignment.clientName}
           </Text>
         </View>
@@ -95,15 +87,11 @@ export function AssignmentCard({ assignment, onPress, hasDraft, syncStatus = 'no
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={[styles.idLabel, { color: Colors.textMuted }]}>REF ID</Text>
-          <Text style={[styles.idValue, { color: Colors.primary }] }>
+          <Text style={[styles.idValue, { color: statusColor }] }>
             #{assignment.referenceNumber}
           </Text>
         </View>
       </View>
-
-      {syncStatus === 'pending' && onSyncPress && (
-        <Button title="Sync Now" variant="outline" onPress={onSyncPress} style={styles.syncButton} textStyle={{ color: Colors.primary }} />
-      )}
 
       {hasDraft && (
         <View style={[styles.draftBadge, { backgroundColor: Colors.primary }] }>

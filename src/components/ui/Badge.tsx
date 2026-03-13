@@ -16,7 +16,7 @@ export function StatusBadge({ status }: StatusBadgeProps) {
   const Colors = useColors();
   const colors = (Colors.statusBadge as any)[status] ?? Colors.statusBadge.ASSIGNED;
   return (
-    <View style={[styles.badge, { backgroundColor: colors.bg }]}>
+    <View style={[styles.badge, { backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.text }]}>
       <Text style={[styles.badgeText, { color: colors.text }]}>
         {(status || 'UNKNOWN').replace('_', ' ')}
       </Text>

@@ -27,25 +27,32 @@ export function ProfileScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
+  const normalizedFullName = user?.full_name ?? user?.fullName ?? '';
+  const normalizedPhone = user?.phone_number ?? user?.phone ?? '';
+  const normalizedCnic = user?.cnic_number ?? user?.cnicNumber ?? '';
+  const normalizedDesignation = user?.designation ?? user?.seniorityLevel ?? 'Agent';
+  const normalizedEmployment = user?.employment_type ?? user?.employmentType ?? 'core';
+  const normalizedProfileImage = user?.profile_image ?? user?.profilePictureUrl ?? null;
+
   const [pushEnabled, setPushEnabled] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
 
   // Edit State
-  const [editName, setEditName] = useState(user?.full_name || '');
-  const [editPhone, setEditPhone] = useState(user?.phone_number || '');
+  const [editName, setEditName] = useState(normalizedFullName);
+  const [editPhone, setEditPhone] = useState(normalizedPhone);
   const [showSignoutModal, setShowSignoutModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalDesc, setModalDesc] = useState('');
-  const [profileImage, setProfileImage] = useState<string | null>(user?.profile_image || null);
+  const [profileImage, setProfileImage] = useState<string | null>(normalizedProfileImage);
 
   // Auto-open edit modal if coming from Home screen circle
   const handleOpenEditModal = useCallback(() => {
-    setEditName(user?.full_name || '');
-    setEditPhone(user?.phone_number || '');
+    setEditName(normalizedFullName);
+    setEditPhone(normalizedPhone);
     setShowEditModal(true);
-  }, [user?.full_name, user?.phone_number]);
+  }, [normalizedFullName, normalizedPhone]);
 
   useEffect(() => {
     if (route.params?.openEdit) {
@@ -61,10 +68,14 @@ export function ProfileScreen() {
 
   useEffect(() => {
     if (!showEditModal) {
-      setEditName(user?.full_name || '');
-      setEditPhone(user?.phone_number || '');
+      setEditName(normalizedFullName);
+      setEditPhone(normalizedPhone);
     }
-  }, [user?.full_name, user?.phone_number, showEditModal]);
+  }, [normalizedFullName, normalizedPhone, showEditModal]);
+
+  useEffect(() => {
+    setProfileImage(normalizedProfileImage || null);
+  }, [normalizedProfileImage]);
 
   const handleSignOutFinal = useCallback(async () => {
     setShowSignoutModal(false);
@@ -83,8 +94,8 @@ export function ProfileScreen() {
 
   const handleSaveProfile = useCallback(async () => {
     const result = await updateProfile({
-      full_name: editName,
-      phone_number: editPhone,
+      fullName: editName,
+      phone: editPhone,
     });
 
     if (result) {
@@ -116,7 +127,7 @@ export function ProfileScreen() {
     if (!result.canceled && result.assets[0]) {
       const uri = result.assets[0].uri;
       setProfileImage(uri);
-      updateUser({ profile_image: uri });
+      updateUser({ profile_image: uri, profilePictureUrl: uri });
       setShowAvatarModal(false);
     }
   }, [updateUser]);
@@ -136,7 +147,7 @@ export function ProfileScreen() {
     if (!result.canceled && result.assets[0]) {
       const uri = result.assets[0].uri;
       setProfileImage(uri);
-      updateUser({ profile_image: uri });
+      updateUser({ profile_image: uri, profilePictureUrl: uri });
       setShowAvatarModal(false);
     }
   }, [updateUser]);
@@ -177,11 +188,11 @@ export function ProfileScreen() {
           </View>
 
           <Text style={[styles.heroLabel, { color: Colors.textMuted }]}>AGENT NAME</Text>
-          <Text style={[styles.userName, { color: Colors.textPrimary }]}>{user.full_name || '—'}</Text>
+          <Text style={[styles.userName, { color: Colors.textPrimary }]}>{normalizedFullName || '—'}</Text>
           <Text style={[styles.userEmail, { color: Colors.textMuted }]}>{user.email}</Text>
           <View style={[styles.designationBadge, { backgroundColor: Colors.bgInput, borderColor: Colors.borderDefault }]}>
             <Text style={[styles.badgeText, { color: Colors.primary }]}>
-              {(user.designation || 'AGENT').toUpperCase()} • {(user.employment_type || 'CORE').replace('_', ' ').toUpperCase()}
+              {(normalizedDesignation || 'AGENT').toUpperCase()} • {normalizedEmployment.replace('_', ' ').toUpperCase()}
             </Text>
           </View>
         </View>
@@ -195,11 +206,11 @@ export function ProfileScreen() {
             </Pressable>
           </View>
           <View style={[styles.card, { backgroundColor: Colors.bgCard, borderColor: Colors.borderDefault }]}>
-            <ProfileRow label="Full Name" value={user.full_name} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
+            <ProfileRow label="Full Name" value={normalizedFullName} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
             <View style={[styles.divider, { backgroundColor: Colors.borderDefault }]} />
-            <ProfileRow label="Identity (CNIC)" value={maskCnic(user.cnic_number)} isSecure color={Colors.textPrimary} labelColor={Colors.textSecondary} />
+            <ProfileRow label="Identity (CNIC)" value={maskCnic(normalizedCnic)} isSecure color={Colors.textPrimary} labelColor={Colors.textSecondary} />
             <View style={[styles.divider, { backgroundColor: Colors.borderDefault }]} />
-            <ProfileRow label="Mobile" value={maskPhone(user.phone_number)} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
+            <ProfileRow label="Mobile" value={maskPhone(normalizedPhone)} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
             <View style={[styles.divider, { backgroundColor: Colors.borderDefault }]} />
             <ProfileRow label="Assigned Cities" value={assignedCities} multiline color={Colors.textPrimary} labelColor={Colors.textSecondary} />
           </View>

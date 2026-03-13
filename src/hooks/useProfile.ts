@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import { profileService } from '../services/profile/profileService';
-import { Inspector } from '../types/api.types';
+import { Inspector, InspectorProfilePatchPayload } from '../types/api.types';
 import { useAuthStore } from '../stores/authStore';
 import { ErrorHandler } from '../utils/errorHandler';
 
 export const useProfile = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ message: string; code: string } | null>(null);
+  const [profile, setProfile] = useState<Inspector | null>(null);
   const setUser = useAuthStore((s) => s.setUser);
 
   const fetchProfile = useCallback(async () => {
@@ -14,6 +15,7 @@ export const useProfile = () => {
     setError(null);
     try {
       const profile = await profileService.getProfile();
+      setProfile(profile);
       setUser(profile);
       return profile;
     } catch (err) {
@@ -25,11 +27,12 @@ export const useProfile = () => {
     }
   }, [setUser]);
 
-  const updateProfile = useCallback(async (data: Partial<Inspector>) => {
+  const updateProfile = useCallback(async (data: InspectorProfilePatchPayload) => {
     setLoading(true);
     setError(null);
     try {
       const updatedProfile = await profileService.updateProfile(data);
+      setProfile(updatedProfile);
       setUser(updatedProfile);
       return updatedProfile;
     } catch (err) {
@@ -44,6 +47,7 @@ export const useProfile = () => {
   return {
     loading,
     error,
+    profile,
     fetchProfile,
     updateProfile,
   };

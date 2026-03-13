@@ -35,12 +35,13 @@ export default function Step4Photos({ onNext, onBack, requestId }: Props) {
 
   const schemaFields = useMemo(() => {
     const schema = getSchema();
-    return schema
-      .filter((field) => field.photo === true)
-      .map((field) => ({
-        label: field.label || field.key,
-        value: field.key,
-      }));
+    const photoEnabled = schema.filter((field) => field.photo === true || field.requires_photo === true);
+    const effectiveFields = photoEnabled.length > 0 ? photoEnabled : schema;
+
+    return effectiveFields.map((field) => ({
+      label: field.label || field.key,
+      value: field.key,
+    }));
   }, [getSchema, activeInspection?.schemaSnapshot]);
 
   const getFieldLabel = useCallback((fieldKey: string | null) => {

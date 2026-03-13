@@ -51,14 +51,54 @@ export class InspectorPermissions {
   /**
    * Guards profile field mutations — only specific fields may be patched.
    */
-  private static readonly PATCHABLE_PROFILE_FIELDS = new Set(['fullName', 'phone', 'designation']);
+  private static readonly PATCHABLE_PROFILE_FIELDS = new Set([
+    'fullName',
+    'phone',
+    'designation',
+    'profilePictureUrl',
+    'cnicNumber',
+    'seniorityLevel',
+    'employmentType',
+    'citiesCovered',
+    'bankScope',
+    'assignedBankId',
+  ]);
+
+  private static readonly PATCH_FIELD_ALIASES: Record<string, string> = {
+    full_name: 'fullName',
+    fullName: 'fullName',
+    phone_number: 'phone',
+    phone: 'phone',
+    designation: 'designation',
+    cnic_number: 'cnicNumber',
+    cnicNumber: 'cnicNumber',
+    seniority_level: 'seniorityLevel',
+    seniorityLevel: 'seniorityLevel',
+    employment_type: 'employmentType',
+    employmentType: 'employmentType',
+    cities_covered: 'citiesCovered',
+    citiesCovered: 'citiesCovered',
+    bank_scope: 'bankScope',
+    bankScope: 'bankScope',
+    assigned_bank_id: 'assignedBankId',
+    assignedBankId: 'assignedBankId',
+    profile_image: 'profilePictureUrl',
+    profilePictureUrl: 'profilePictureUrl',
+    profile_picture_url: 'profilePictureUrl',
+  };
 
   static sanitizeProfilePatch(input: Record<string, any>): Record<string, any> {
     const sanitized: Record<string, any> = {};
     for (const key in input) {
-      if (this.PATCHABLE_PROFILE_FIELDS.has(key)) {
-        sanitized[key] = input[key];
+      const normalizedKey = this.PATCH_FIELD_ALIASES[key] ?? key;
+      if (!this.PATCHABLE_PROFILE_FIELDS.has(normalizedKey)) {
+        continue;
       }
+      const value = input[key];
+      if (value === undefined || value === null) {
+        continue;
+      }
+      sanitized[normalizedKey] = typeof value === 'string' ? value.trim() : value;
     }
     return sanitized;
   }

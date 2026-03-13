@@ -19,7 +19,7 @@ import type {
   RequestStatus,
   PaginatedRequestResult,
 } from '../types/requestTypes';
-import type { FindingsSchema } from '@/types/schema.types';
+import type { FindingsFieldSchema, FindingsSchema } from '@/types/schema.types';
 
 // ─── Valid status values ──────────────────────────────────
 
@@ -88,6 +88,30 @@ function safeParseDate(isoString: unknown): Date {
 // ─── Single Item Normalizer ──────────────────────────────
 
 /**
+ * Normalizes findings schema entries and ensures photo metadata is set when required.
+ */
+function normalizeFindingsSchema(schema: unknown): FindingsSchema {
+  if (!Array.isArray(schema)) {
+    return [];
+  }
+
+  return schema.map((rawField, index) => {
+    const field = (rawField ?? {}) as FindingsFieldSchema & Record<string, any>;
+    const requiresPhoto = Boolean(field.requires_photo ?? field.requiresPhoto);
+    const hasPhotoFlag = field.photo === true || requiresPhoto;
+
+    return {
+      ...field,
+      key: field.key ?? `field_${index}`,
+      label: field.label ?? field.key ?? `Field ${index + 1}`,
+      options: Array.isArray(field.options) ? field.options : [],
+      requires_photo: requiresPhoto,
+      photo: hasPhotoFlag,
+    } as FindingsFieldSchema;
+  });
+}
+
+/**
  * Converts a single raw API request object into an internal RequestModel.
  * Handles all field mapping, type conversion, and null safety.
  */
@@ -131,7 +155,9 @@ export function normalizeRequest(rawInput: any): RequestModel {
       ? {
           name: raw.contractTypeName ?? raw.contract_type?.name ?? raw.contractType?.name,
           code: (raw.contractTypeName ?? raw.contract_type?.name ?? raw.contractType?.name)?.toLowerCase() ?? '',
-          findingsSchema: (raw.findingsSchema ?? raw.contract_type?.findings_schema ?? raw.contractType?.findingsSchema ?? []) as FindingsSchema,
+          findingsSchema: normalizeFindingsSchema(
+            raw.findingsSchema ?? raw.contract_type?.findings_schema ?? raw.contractType?.findingsSchema ?? []
+          ),
         }
       : null,
 

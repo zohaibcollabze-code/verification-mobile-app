@@ -16,6 +16,7 @@ import * as InspectionsDB from '@/services/db/inspections';
 import * as SyncQueueDB from '@/services/db/syncQueue';
 import { runSync } from '@/services/sync/syncEngine';
 import type { RequestStatus } from '@/services/api/types/requestTypes';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type FilterOption = 'ALL' | 'assigned' | 'in_progress' | 'submitted' | 'returned';
 
@@ -30,7 +31,7 @@ const FILTERS: { key: FilterOption; label: string }[] = [
 export function AssignmentsScreen() {
   const Colors = useColors();
   const { themeMode } = useThemeStore();
-  const { jobs, loading: jobsLoading, fetchJobs } = useJobs();
+  const { jobs, loading: jobsLoading, fetchJobs, stats, fetchInspectorStats } = useJobs();
   const toast = useToast();
   const globalSyncStatus = useNetworkStore((s) => s.syncStatus);
 
@@ -53,7 +54,8 @@ export function AssignmentsScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchJobs({ page: 1, limit: 100 });
-    }, [fetchJobs])
+      fetchInspectorStats();
+    }, [fetchJobs, fetchInspectorStats])
   );
 
   const filteredAssignments = useMemo(() => {
@@ -104,8 +106,9 @@ export function AssignmentsScreen() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchJobs({ page: 1, limit: 100 });
+    await fetchInspectorStats();
     setRefreshing(false);
-  }, [fetchJobs]);
+  }, [fetchJobs, fetchInspectorStats]);
 
   const handleCardPress = useCallback(
     (id: string) => {
@@ -114,42 +117,149 @@ export function AssignmentsScreen() {
     [navigation],
   );
 
-  const handleSyncPress = useCallback(() => {
-    runSync()
-      .then(() => toast.showToast('info', 'Sync started'))
-      .catch((err) => {
-        console.warn('[Assignments] manual sync failed', err);
-        toast.showToast('error', 'Failed to start sync');
-      });
-  }, [toast]);
 
   const handleConflictPress = useCallback((localId?: string) => {
     if (!localId) return;
     navigation.navigate('ConflictResolution', { inspectionLocalId: localId });
   }, [navigation]);
 
-  if (jobsLoading && !refreshing) {
-    return (
-      <View style={[styles.container, { backgroundColor: Colors.bgScreen }]}>
-        <View style={styles.header}>
-          <Skeleton width={150} height={30} />
-        </View>
-        <View style={styles.controlsSection}>
-          <Skeleton height={52} borderRadius={14} />
-        </View>
-        <View style={{ paddingHorizontal: 20 }}>
-          {[1, 2, 3].map(i => (
-            <View key={i} style={styles.skeletonCard}>
-              <Skeleton height={140} borderRadius={20} />
-            </View>
-          ))}
-        </View>
-      </View>
-    );
-  }
+  const derivedStats = useMemo(() => {
+    if (stats) {
+      const total = stats.totalAssignments ?? stats.totalRequests ?? 0;
+      const inProgress = stats.inProgressAssignments ?? stats.assignedRequests ?? 0;
+      const completed = stats.completedAssignments ?? stats.publishedRequests ?? 0;
+      const pending = stats.pendingReviews ?? stats.returnedRequests ?? 0;
+      const published = stats.publishedAssignments ?? stats.publishedRequests ?? 0;
+      const returned = stats.returnedAssignments ?? stats.returnedRequests ?? 0;
+      const submitted = stats.submittedAssignments ?? stats.assignedRequests ?? 0;
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: Colors.bgScreen }]}>
+      return {
+        total,
+        inProgress,
+        completed,
+        pending,
+        published,
+        returned,
+        submitted,
+        slaRate: typeof stats.slaHitRate === 'number' ? stats.slaHitRate : null,
+        averageHours: typeof stats.averageTurnaroundHours === 'number' ? stats.averageTurnaroundHours : null,
+      };
+    }
+
+    const localCompleted = filteredAssignments.filter((a) => a.status === 'submitted').length;
+    const localPending = filteredAssignments.filter((a) => a.status === 'returned').length;
+    const localInProgress = filteredAssignments.filter((a) => a.status === 'in_progress').length;
+
+    return {
+      total: filteredAssignments.length,
+      inProgress: localInProgress,
+      completed: localCompleted,
+      pending: localPending,
+      published: 0,
+      returned: localPending,
+      submitted: localCompleted,
+      slaRate: null,
+      averageHours: null,
+    };
+  }, [stats, filteredAssignments]);
+
+  const renderStatsCard = () => {
+    if (!stats) {
+      return (
+        <View style={[styles.statsCardSkeleton, { backgroundColor: Colors.bgCard, borderColor: Colors.borderDefault }]}> 
+          <Skeleton height={16} width={120} />
+          <View style={styles.statsSkeletonRow}>
+            <Skeleton height={40} width={80} />
+            <Skeleton height={40} width={80} />
+            <Skeleton height={40} width={80} />
+          </View>
+        </View>
+      );
+    }
+
+    const donutSegments = [
+      { label: 'Pending Review', value: derivedStats.pending, color: '#F76E64', highlight: true },
+      { label: 'In Progress', value: derivedStats.inProgress, color: '#8B7CFF' },
+      { label: 'Completed', value: derivedStats.completed, color: '#5DD5A1' },
+    ];
+
+    const totalForPercent = Math.max(derivedStats.total, 1);
+    const gradientColors: [string, string] = themeMode === 'dark'
+      ? ['#1C1B2E', '#11101E']
+      : ['#FFFFFF', '#F6F5FF'];
+
+    let currentRotation = -90; // start at top
+    const donutSlices = donutSegments.map((segment) => {
+      const percent = segment.value / totalForPercent;
+      const sweep = percent * 360;
+      const slice = { ...segment, sweep, start: currentRotation };
+      currentRotation += sweep;
+      return slice;
+    });
+
+    const pendingSegment = donutSegments[0];
+
+    return (
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.statsCard, themeMode === 'dark' && { borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }]}
+      >
+        <View style={styles.statsCardHeader}>
+          <View>
+            <Text style={[styles.statsTitle, { color: Colors.textPrimary }]}>Inspection Radar</Text>
+            <Text style={[styles.statsSubtitle, { color: Colors.textMuted }]}>Live job distribution</Text>
+          </View>
+          <View style={[styles.pendingFlag, { backgroundColor: pendingSegment.color + '25' }]}> 
+            <Text style={[styles.pendingFlagLabel, { color: pendingSegment.color }]}>PENDING</Text>
+            <Text style={[styles.pendingFlagValue, { color: pendingSegment.color }]}>{pendingSegment.value}</Text>
+          </View>
+        </View>
+
+        <View style={styles.donutRow}>
+          <View style={styles.donutWrapper}>
+            <View style={styles.donutBase}>
+              {donutSlices.map((slice) => (
+                <View key={slice.label} style={[styles.donutSliceWrapper, { transform: [{ rotate: `${slice.start}deg` }] }]}> 
+                  <View
+                    style={[
+                      styles.donutSlice,
+                      {
+                        borderColor: slice.color,
+                        borderTopWidth: slice.sweep > 0 ? 14 : 0,
+                        transform: [{ rotate: `${slice.sweep}deg` }],
+                      },
+                    ]}
+                  />
+                </View>
+              ))}
+              <View style={styles.donutCenter}>
+                <Text style={[styles.donutValue, { color: Colors.textPrimary }]}>{derivedStats.total}</Text>
+                <Text style={[styles.donutLabel, { color: Colors.textMuted }]}>Total</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.donutLegend}>
+            {donutSegments.map((segment) => (
+              <View key={segment.label} style={styles.legendRow}>
+                <View style={[styles.legendBadge, { backgroundColor: segment.color }]} />
+                <View style={styles.legendTextBlock}>
+                  <Text style={[styles.legendLabel, { color: Colors.textPrimary }]}>{segment.label}</Text>
+                  <Text style={[styles.legendValue, { color: Colors.textSecondary }]}>
+                    {segment.value} • {Math.round((segment.value / totalForPercent) * 100) || 0}%
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      </LinearGradient>
+    );
+  };
+
+  const ListHeaderComponent = useCallback(() => (
+    <View>
       <View style={styles.header}>
         <View>
           <Text style={[styles.headerTitle, { color: Colors.textPrimary }]}>Assignments</Text>
@@ -172,7 +282,7 @@ export function AssignmentsScreen() {
       </View>
 
       <View style={styles.controlsSection}>
-        <View style={[styles.searchWrapper, { backgroundColor: Colors.bgInput, borderColor: Colors.borderDefault }]}>
+        <View style={[styles.searchWrapper, { backgroundColor: Colors.bgInput, borderColor: Colors.borderDefault }] }>
           <View style={styles.searchIcon}>
             <GeometricIcon type="Search" size={18} color={Colors.textMuted} />
           </View>
@@ -217,8 +327,35 @@ export function AssignmentsScreen() {
         </ScrollView>
       </View>
 
+      <View style={styles.statsCardWrapper}>{renderStatsCard()}</View>
+    </View>
+  ), [Colors.bgInput, Colors.borderDefault, Colors.primary, Colors.textMuted, Colors.textPlaceholder, Colors.textPrimary, Colors.textSecondary, filter, filteredAssignments.length, initials, navigation, renderStatsCard, searchText, user?.profile_image]);
+
+  if (jobsLoading && !refreshing) {
+    return (
+      <View style={[styles.container, { backgroundColor: Colors.bgScreen }]}>
+        <View style={styles.header}>
+          <Skeleton width={150} height={30} />
+        </View>
+        <View style={styles.controlsSection}>
+          <Skeleton height={52} borderRadius={14} />
+        </View>
+        <View style={{ paddingHorizontal: 20 }}>
+          {[1, 2, 3].map(i => (
+            <View key={i} style={styles.skeletonCard}>
+              <Skeleton height={140} borderRadius={20} />
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: Colors.bgScreen }] }>
       <FlatList
         data={filteredAssignments}
+        ListHeaderComponent={ListHeaderComponent}
         renderItem={({ item }) => {
           const syncMeta = assignmentSyncMap.get(item.id) ?? { status: 'none' };
           return (
@@ -226,7 +363,6 @@ export function AssignmentsScreen() {
               assignment={item as any}
               onPress={handleCardPress}
               syncStatus={syncMeta.status}
-              onSyncPress={syncMeta.status === 'pending' ? handleSyncPress : undefined}
               onConflictPress={syncMeta.status === 'conflict' ? () => handleConflictPress(syncMeta.localId) : undefined}
             />
           );
@@ -294,4 +430,135 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 14, fontWeight: '600' },
   listContent: { paddingHorizontal: 24, paddingBottom: 100 },
   skeletonCard: { marginBottom: 16 },
+  statsCardWrapper: {
+    paddingHorizontal: 24,
+    paddingBottom: 8,
+  },
+  statsCard: {
+    borderRadius: 24,
+    padding: 20,
+    gap: 16,
+  },
+  statsCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pendingFlag: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignItems: 'flex-start',
+  },
+  pendingFlagLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  pendingFlagValue: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  statsTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  statsSubtitle: {
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  donutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+    marginTop: 20,
+  },
+  donutWrapper: {
+    width: 160,
+    height: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  donutBase: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 16,
+    borderColor: 'rgba(0,0,0,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  donutSliceWrapper: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  donutSlice: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: 70,
+    borderWidth: 16,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
+  donutCenter: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  donutValue: {
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  donutLabel: {
+    fontSize: 12,
+    letterSpacing: 1,
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  donutLegend: {
+    flex: 1,
+    gap: 12,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  legendBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  legendTextBlock: {
+    flex: 1,
+  },
+  legendLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  legendValue: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statsCardSkeleton: {
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 20,
+    gap: 20,
+  },
+  statsSkeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
 });

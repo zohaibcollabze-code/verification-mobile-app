@@ -11,6 +11,7 @@ import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { AppNavigator } from '@/navigation/AppNavigator';
+import { AuthProvider } from './src/services/auth/authContext';
 import { ToastProvider } from '@/components/ui/Toast';
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { useAuthStore } from './src/stores/authStore';
@@ -69,10 +70,12 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <ToastProvider>
-          <OfflineBanner />
-          <AppNavigator />
-        </ToastProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <OfflineBanner />
+            <AppNavigator />
+          </ToastProvider>
+        </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

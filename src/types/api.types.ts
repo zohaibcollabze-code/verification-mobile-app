@@ -50,16 +50,59 @@ export interface Inspector {
   email: string;
   full_name: string;
   cnic_number: string;
-  designation: 'junior' | 'senior';
-  employment_type: 'full_time' | 'contract';
+  designation: string;
+  employment_type: string;
   cities_covered: string[];
-  bank_scope: 'single_bank' | 'multi_bank';
+  bank_scope: string;
   assigned_bank_id: string | null;
   is_first_login: boolean;
   phone_number: string;
   profile_initials: string;
   profile_image?: string | null;
+
+  /** Optional camelCase mirrors for compatibility with new endpoints */
+  fullName?: string;
+  phone?: string;
+  cnicNumber?: string;
+  seniority_level?: string;
+  seniorityLevel?: string;
+  employmentType?: string;
+  citiesCovered?: string[];
+  bankScope?: string;
+  assignedBankId?: string | number | null;
+  profilePictureUrl?: string | null;
 }
+
+export interface InspectorProfile {
+  id: number | string;
+  userId: number | string;
+  email: string;
+  fullName: string;
+  phone: string;
+  cnicNumber: string;
+  designation: string;
+  seniorityLevel: string;
+  employmentType: string;
+  citiesCovered: string[];
+  bankScope: string;
+  assignedBankId: number | string | null;
+  isActive: boolean;
+  createdAt: string;
+  profilePictureUrl: string | null;
+}
+
+export type InspectorProfilePatchPayload = Partial<Pick<InspectorProfile,
+  'fullName' |
+  'phone' |
+  'cnicNumber' |
+  'designation' |
+  'seniorityLevel' |
+  'employmentType' |
+  'citiesCovered' |
+  'bankScope' |
+  'assignedBankId' |
+  'profilePictureUrl'
+>>;
 
 // ─── Contract Type ────────────────────────────────────────
 

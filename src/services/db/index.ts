@@ -18,7 +18,8 @@ export function initDB(): void {
       schemaSnapshot TEXT DEFAULT '{}',
       submittedAt TEXT,
       cachedAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
+      updatedAt TEXT NOT NULL,
+      encrypted INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS inspection_photos (
@@ -29,6 +30,7 @@ export function initDB(): void {
       localUri TEXT,
       serverUri TEXT,
       uploadStatus TEXT DEFAULT 'pending',
+      checksum TEXT,
       createdAt TEXT NOT NULL,
       FOREIGN KEY(inspectionLocalId) REFERENCES inspections(localId)
     );

@@ -58,6 +58,12 @@ export interface RawApiRequest {
   previousInspectionStatus?: string;
   inspectionScope?: string;
   inspectionType?: string;
+  isUrgent?: boolean;
+  urgencyReason?: string | null;
+  noticeOfDeliveryUrl?: string | null;
+  noticeOfDeliveryPublicId?: string | null;
+  writtenOfferUrl?: string | null;
+  writtenOfferPublicId?: string | null;
   fieldData?: Record<string, any>;
   currentAssignment?: {
     inspectorId: string;
@@ -115,6 +121,12 @@ export interface RequestModel {
   previousInspectionStatus: string;
   inspectionScope: string;
   inspectionType: string;
+  isUrgent: boolean;
+  urgencyReason: string | null;
+  noticeOfDeliveryUrl: string | null;
+  noticeOfDeliveryPublicId: string | null;
+  writtenOfferUrl: string | null;
+  writtenOfferPublicId: string | null;
   canApprove: boolean;
   canReject: boolean;
   avatarUrl: string | null;

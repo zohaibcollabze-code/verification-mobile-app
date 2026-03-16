@@ -151,6 +151,13 @@ export function normalizeRequest(rawInput: any): RequestModel {
     inspectionScope: raw.inspectionScope ?? '',
     inspectionType: raw.inspectionType ?? '',
     
+    isUrgent: raw.isUrgent ?? false,
+    urgencyReason: raw.urgencyReason ?? raw.urgency_reason ?? null,
+    noticeOfDeliveryUrl: raw.noticeOfDeliveryUrl ?? raw.notice_of_delivery_url ?? null,
+    noticeOfDeliveryPublicId: raw.noticeOfDeliveryPublicId ?? raw.notice_of_delivery_public_id ?? null,
+    writtenOfferUrl: raw.writtenOfferUrl ?? raw.written_offer_url ?? null,
+    writtenOfferPublicId: raw.writtenOfferPublicId ?? raw.written_offer_public_id ?? null,
+    
     contractType: (raw.contractTypeName || raw.contract_type || raw.contractType)
       ? {
           name: raw.contractTypeName ?? raw.contract_type?.name ?? raw.contractType?.name,

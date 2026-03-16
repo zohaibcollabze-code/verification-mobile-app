@@ -2,9 +2,11 @@ import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 
 import { AppException } from '../../utils/exceptions';
 import { ApiResponse } from '../../types/api.types';
 import { ErrorHandler } from '../../utils/errorHandler';
-import { getAccessToken, setAccessToken, getRefreshToken, setRefreshToken, clearSecureStorage } from '../storage/secureStorage';
+import { getAccessToken, setAccessToken, clearSecureStorage } from '../storage/secureStorage';
+import { refreshAccessToken } from '../auth/tokenManager';
 import { authEvents } from '../../utils/authEvents';
 import { API_BASE_URL } from '@/config/environment';
+import { useNetworkStore } from '@/stores/networkStore';
 
 const BASE_URL = API_BASE_URL;
 
@@ -17,9 +19,15 @@ const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// Request Interceptor: Inject Token
+// Request Interceptor: Inject Token & Offline Guard
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    // Offline Guard: Prevent non-GET requests when offline
+    const isOnline = useNetworkStore.getState().isOnline;
+    if (!isOnline && config.method?.toLowerCase() !== 'get') {
+      throw new AppException('Network unavailable. Action queued for sync.', 'OFFLINE_ERROR');
+    }
+
     const token = await getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -120,48 +128,31 @@ async function handleRefreshFlow(originalRequest: any) {
   isRefreshing = true;
 
   try {
-    const refreshToken = await getRefreshToken();
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
-    // Use a separate axios call for the refresh itself to avoid interceptor recursion
-    const refreshResponse = await axios.post(`${BASE_URL}/auth/refresh`, {
-      refreshToken
-    }, { timeout: 10000 });
+    // Use the robust refresh logic from tokenManager (handles backup tokens, retries, etc.)
+    const newToken = await refreshAccessToken();
     
-    const apiResponse = refreshResponse.data;
-    if (apiResponse.success && apiResponse.data?.accessToken) {
-      const newToken = apiResponse.data.accessToken; 
-      await setAccessToken(newToken);
-      const nextRefreshToken = apiResponse.data.refreshToken;
-      if (nextRefreshToken) {
-        await setRefreshToken(nextRefreshToken);
-      }
-      
-      onRefreshed(newToken);
-      isRefreshing = false;
+    onRefreshed(newToken);
+    isRefreshing = false;
 
-      // Retry the original request for the triggering caller
-      originalRequest.headers.Authorization = `Bearer ${newToken}`;
-      originalRequest._retry = true;
-      return apiClient(originalRequest);
-    } else {
-      throw new Error(apiResponse.error || 'Refresh response indicated failure');
-    }
+    // Retry the original request for the triggering caller
+    originalRequest.headers.Authorization = `Bearer ${newToken}`;
+    originalRequest._retry = true;
+    return apiClient(originalRequest);
   } catch (refreshError: any) {
     isRefreshing = false;
-    const appError = new AppException('Session expired', 'INVALID_TOKEN');
     
     // Log the actual underlying reason for the refresh failure
     console.error('[Refresh] Token rotation failed:', refreshError.message || refreshError);
     
+    // Map to a user-friendly error if it isn't already an AppException
+    const appError = refreshError instanceof AppException 
+      ? refreshError 
+      : new AppException('Session expired. Please log in again.', 'INVALID_TOKEN');
+    
     // Notify all queued subscribers that the session is dead
     onRefreshFailed(appError);
     
-    console.warn('Authentication refresh failed — redirecting to login');
-    await clearSecureStorage();
-    authEvents.emitLogout();
+    // Note: tokenManager already handles clearSecureStorage() and authEvents.emitLogout() on terminal failure
     
     return Promise.reject(appError);
   }

@@ -42,6 +42,8 @@ export interface FindingsFieldSchema {
   photo_caption_hint?: string;
   /** Minimum photos required for this field */
   min_photos?: number;
+  /** If true, this field captures video evidence; false = image only */
+  video?: boolean;
 }
 
 /** Complete findings schema — array of field definitions */

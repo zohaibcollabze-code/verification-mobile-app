@@ -11,6 +11,8 @@ export interface InspectionRecord {
   submittedAt: string | null;
   cachedAt: string;
   updatedAt: string;
+  gpsLatitude: number | null;
+  gpsLongitude: number | null;
 }
 
 export interface InspectionPhoto {

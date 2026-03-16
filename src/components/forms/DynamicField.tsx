@@ -3,7 +3,7 @@
  * Renders any FindingsFieldSchema field type with fallback to TextInput.
  * Matches Screenshot 2 "Detailed Inspection Data" design.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, Alert } from 'react-native';
 import { Input } from '@/components/ui/Input';
 import { useColors } from '@/constants/colors';
@@ -17,6 +17,28 @@ export function DynamicField({ field, value, onChange, error }: DynamicFieldProp
   const colors = useColors();
   const isUnknownType = !KNOWN_TYPES.includes(field.type);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const yesNoMeta = useMemo(() => {
+    if (field.type !== 'dropdown' || !Array.isArray(field.options) || field.options.length !== 2) {
+      return null;
+    }
+    const normalized = field.options.map((opt) => String(opt ?? '').trim().toLowerCase());
+    const yesIndex = normalized.indexOf('yes');
+    const noIndex = normalized.indexOf('no');
+    if (yesIndex === -1 || noIndex === -1) {
+      return null;
+    }
+    return {
+      yesValue: field.options[yesIndex],
+      noValue: field.options[noIndex],
+    } as const;
+  }, [field]);
+
+  useEffect(() => {
+    if (!yesNoMeta) return;
+    if (value == null || value === '') {
+      onChange(yesNoMeta.noValue);
+    }
+  }, [yesNoMeta, value, onChange]);
 
   const styles = useMemo(() => StyleSheet.create({
     outerContainer: {
@@ -197,6 +219,53 @@ export function DynamicField({ field, value, onChange, error }: DynamicFieldProp
       color: colors.primary,
       fontSize: 13,
       fontWeight: '700',
+    },
+    radioGroup: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 6,
+    },
+    radioOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.borderDefault,
+      backgroundColor: colors.bgInput,
+      flex: 1,
+    },
+    radioOptionSelected: {
+      borderColor: colors.primary,
+      backgroundColor: 'rgba(37, 99, 235, 0.05)',
+    },
+    radioOuter: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      borderWidth: 2,
+      borderColor: colors.textMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+    radioOuterSelected: {
+      borderColor: colors.primary,
+    },
+    radioInner: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: 'transparent',
+    },
+    radioInnerSelected: {
+      backgroundColor: colors.primary,
+    },
+    radioLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textPrimary,
     },
   }), [colors]);
 
@@ -392,6 +461,39 @@ export function DynamicField({ field, value, onChange, error }: DynamicFieldProp
 
       case 'date':
       case 'dropdown':
+        if (field.type === 'dropdown' && yesNoMeta) {
+          const resolvedValue = value ?? yesNoMeta.noValue;
+          const radioOptions = [
+            { label: yesNoMeta.yesValue, value: yesNoMeta.yesValue },
+            { label: yesNoMeta.noValue, value: yesNoMeta.noValue },
+          ];
+          return (
+            <View style={styles.fieldContainer}>
+              <Text style={styles.label}>
+                {field.label}
+                {field.required && <Text style={styles.required}> * Required</Text>}
+              </Text>
+              <View style={styles.radioGroup}>
+                {radioOptions.map((option) => {
+                  const selected = resolvedValue === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      style={[styles.radioOption, selected && styles.radioOptionSelected]}
+                      onPress={() => onChange(option.value)}
+                    >
+                      <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
+                        <View style={[styles.radioInner, selected && styles.radioInnerSelected]} />
+                      </View>
+                      <Text style={styles.radioLabel}>{option.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {error && <Text style={styles.error}>{error}</Text>}
+            </View>
+          );
+        }
         const displayValue = value ? String(value) : (field.type === 'date' ? 'Select date' : 'Select option');
         return (
           <View style={styles.fieldContainer}>
@@ -440,7 +542,7 @@ export function DynamicField({ field, value, onChange, error }: DynamicFieldProp
           </View>
         )}
       </View>
-      {field.type === 'dropdown' && field.options?.length ? (
+      {field.type === 'dropdown' && field.options?.length && !yesNoMeta ? (
         <BottomSheetPicker
           visible={dropdownOpen}
           title={field.label}

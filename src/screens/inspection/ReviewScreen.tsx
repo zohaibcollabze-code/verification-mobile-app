@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useColors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInspectionStore } from '@/stores/inspectionStore';
+import { useNetworkStore } from '@/stores/networkStore';
 import { Button } from '@/components/ui/Button';
 import { AppModal } from '@/components/ui/AppModal';
 import { findingsService } from '@/services/findings/findingsService';
@@ -107,6 +108,7 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
   const getSchema = useInspectionStore((s) => s.getSchema);
   const gps = useInspectionStore((s) => s.gps);
   const setGPS = useInspectionStore((s) => s.setGPS);
+  const submitInspection = useInspectionStore((s) => s.submitInspection);
   const clearActive = useInspectionStore((s) => s.clearActive);
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -165,33 +167,25 @@ export default function ReviewScreen({ onBack, requestId, onGoToStep }: Props) {
     });
 
     try {
-      const photosByField: Record<string, string[]> = {};
-      photos.forEach((p) => {
-        const key = p.fieldId || 'general';
-        if (!photosByField[key]) photosByField[key] = [];
-        if (p.localUri) {
-          photosByField[key].push(p.localUri);
-        }
-      });
-
-      await findingsService.submitFindings({
-        requestId,
-        findingData: {
-          ...step3.findingData,
-          remarks: step3.remarks,
-          totalTransactionsToDate: step1.totalTransactionsToDate,
-          thisInspectionNumber: step2.thisInspectionNumber,
-          inspectionDate: step2.inspectionDate,
-          inspectionType: step2.inspectionType,
-          inspectorDetail: step2.inspectorDetail,
-        },
-        overallStatus: (step3.findingData[FIELD_KEYS.overallStatus] as string) || 'satisfactory',
-        photosByField,
-        gpsCoordinates: {
-          latitude: gpsResult.latitude,
-          longitude: gpsResult.longitude,
-        },
-      });
+      // Logic for building photosByField is no longer needed here as submitInspection 
+      // in inspectionStore handles the queuing, and syncEngine handles the actual upload.
+      
+      submitInspection();
+      
+      const isOnline = useNetworkStore.getState().isOnline;
+      if (!isOnline) {
+        Alert.alert(
+          'Submission Queued',
+          'You are offline. Your inspection report has been saved and will be uploaded automatically once internet connectivity is restored.',
+          [{ text: 'OK', onPress: () => {
+            clearActive();
+            if (assignment) {
+              (navigation as any).navigate('Success', { reference: assignment.referenceNumber });
+            }
+          }}]
+        );
+        return;
+      }
 
       clearActive();
       if (assignment) {

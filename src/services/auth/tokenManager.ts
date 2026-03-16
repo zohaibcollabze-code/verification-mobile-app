@@ -20,6 +20,38 @@ const BASE_URL = API_BASE_URL;
 const REFRESH_MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
 
+/**
+ * Checks if a JWT token is expired or will expire within the given threshold.
+ * Uses manual base64 decoding to avoid external dependencies.
+ */
+export function isTokenExpiringSoon(token: string | null, thresholdMinutes: number = 5): boolean {
+  if (!token) return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+
+    // Decode payload (middle part)
+    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(payloadBase64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+
+    const payload = JSON.parse(jsonPayload);
+    const exp = payload.exp;
+
+    if (!exp) return false; // If no exp claim, assume it doesn't expire or handle as valid
+
+    const now = Math.floor(Date.now() / 1000);
+    return exp - now < thresholdMinutes * 60;
+  } catch (err) {
+    console.error('[tokenManager] Failed to decode token', err);
+    return true; // If we can't decode, assume it's invalid/expired to be safe
+  }
+}
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -82,7 +114,17 @@ export async function refreshAccessToken(): Promise<string> {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`Refresh failed with status ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        const status = response.status;
+        
+        // Terminal failures: Refresh token is invalid, expired, or revoked
+        if (status === 401 || status === 403 || status === 400 || errorData.code === 'INVALID_REFRESH_TOKEN') {
+          await clearSecureStorage();
+          authEvents.emitLogout();
+          throw new AppException('Session expired. Please log in again.', 'SESSION_EXPIRED');
+        }
+        
+        throw new Error(`Refresh failed with status ${status}`);
       }
 
       const body = await response.json();
@@ -96,6 +138,11 @@ export async function refreshAccessToken(): Promise<string> {
 
       throw new Error('Refresh response missing accessToken');
     } catch (error) {
+      // If it's an AppException we threw (terminal), rethrow it
+      if (error instanceof AppException && error.code === 'SESSION_EXPIRED') {
+        throw error;
+      }
+
       if (attempt === 1 && refreshToken) {
         const backup = await getBackupRefreshToken();
         if (backup && backup !== refreshToken) {
@@ -104,23 +151,23 @@ export async function refreshAccessToken(): Promise<string> {
           continue;
         }
       }
+      
       if (__DEV__) {
         console.warn(`[tokenManager] Refresh attempt ${attempt} failed:`, error);
       }
+
       if (attempt < REFRESH_MAX_RETRIES) {
         await delay(RETRY_DELAY_MS * attempt);
         continue;
       }
-      await clearSecureStorage();
-      authEvents.emitLogout();
-      throw new AppException('Session expired. Please log in again.', 'SESSION_EXPIRED');
+      
+      // If we've exhausted retries but it wasn't a terminal auth error, 
+      // just throw the error without logging out. The app will retry on the next request.
+      throw new AppException('Network error. Could not rotate token.', 'REFRESH_NETWORK_ERROR');
     }
   }
 
-  // Should never reach here
-  await clearSecureStorage();
-  authEvents.emitLogout();
-  throw new AppException('Session expired. Please log in again.', 'SESSION_EXPIRED');
+  throw new AppException('Token rotation failed after retries.', 'REFRESH_FAILED');
 }
 
 /**

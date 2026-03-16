@@ -143,9 +143,13 @@ export function AssignmentDetailScreen() {
     }
 
     const fallbackDocs: { id: string; title: string; url: string }[] = [];
-    const offerLetter = (assignment as any)?.offerLetterUrl ?? (assignment as any)?.fieldData?.offerLetterPdf;
+    const offerLetter = assignment.writtenOfferUrl || ((assignment as any)?.offerLetterUrl ?? (assignment as any)?.fieldData?.offerLetterPdf);
     if (offerLetter) {
-      fallbackDocs.push({ id: 'offer-letter', title: 'Offer Letter', url: offerLetter });
+      fallbackDocs.push({ id: 'offer-letter', title: 'Written Offer', url: offerLetter });
+    }
+    const noticeOfDelivery = assignment.noticeOfDeliveryUrl || (assignment as any)?.fieldData?.noticeOfDeliveryUrl;
+    if (noticeOfDelivery) {
+      fallbackDocs.push({ id: 'notice-of-delivery', title: 'Notice of Delivery', url: noticeOfDelivery });
     }
     const inspectionPack = (assignment as any)?.inspectionPackUrl ?? (assignment as any)?.fieldData?.inspectionPackPdf;
     if (inspectionPack) {
@@ -227,125 +231,108 @@ export function AssignmentDetailScreen() {
 
           <View style={[styles.divider, { backgroundColor: Colors.borderDefault }]} />
 
-          <View style={styles.quickInfoGrid}>
-            <View style={styles.quickInfoItem}>
-              <Text style={[styles.quickLabel, { color: Colors.textMuted }]}>BANK</Text>
-              <Text style={[styles.quickValue, { color: Colors.textSecondary }]}>{assignment.bankName}</Text>
-            </View>
-            <View style={styles.quickInfoItem}>
-              <Text style={[styles.quickLabel, { color: Colors.textMuted }]}>CONTRACT</Text>
-              <Text style={[styles.quickValue, { color: Colors.textSecondary }]}>{assignment.contractType?.name || 'Standard'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.quickInfoGrid}>
-            <View style={styles.quickInfoItem}>
-              <Text style={[styles.quickLabel, { color: Colors.textMuted }]}>ASSIGNMENT CREATED</Text>
-              <Text style={[styles.quickValue, { color: Colors.textPrimary }]}>{formatDate(assignment.createdAt)}</Text>
-            </View>
-            <View style={styles.quickInfoItem}>
-              <Text style={[styles.quickLabel, { color: Colors.textMuted }]}>DEADLINE</Text>
-              <Text style={[styles.quickValue, assignment.dueDate ? { color: Colors.primary } : { color: Colors.textMuted }]}>
-                {assignment.dueDate ? formatDate(assignment.dueDate) : '—'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.timelineInline}>
-            <View style={styles.timelineInlineItem}>
-              <View style={[styles.timelineInlineDot, { backgroundColor: Colors.success }]} />
-              <View>
-                <Text style={[styles.timelineInlineLabel, { color: Colors.textPrimary }]}>Created</Text>
-                <Text style={[styles.timelineInlineValue, { color: Colors.textMuted }]}>{formatDate(assignment.createdAt)}</Text>
-              </View>
-            </View>
-            {assignment.status?.toLowerCase() === 'accepted' && (
-              <View style={styles.timelineInlineItem}>
-                <View style={[styles.timelineInlineDot, { backgroundColor: Colors.primary }]} />
-                <View>
-                  <Text style={[styles.timelineInlineLabel, { color: Colors.textPrimary }]}>Accepted</Text>
-                  <Text style={[styles.timelineInlineValue, { color: Colors.textMuted }]}>Inspector In Progress</Text>
+          {/* Site Identity Grid — Fix 3 */}
+          <View style={styles.siteIdentityGrid}>
+            {[
+              { label: 'BANK NAME', value: assignment.bankName },
+              { label: 'CONTRACT NAME', value: assignment.contractType?.name || 'Standard' },
+              { label: 'ASSIGNMENT', value: assignment.referenceNumber },
+              { label: 'CREATED', value: formatDate(assignment.createdAt) },
+              { label: 'DEADLINE', value: assignment.dueDate ? formatDate(assignment.dueDate) : '—' },
+              { label: 'RETURNED', value: assignment.status?.toLowerCase() === 'returned' ? 'Yes' : '—' },
+              { label: 'DEALING', value: assignment.contactPerson || '—' },
+            ].map((row, index, arr) => (
+              <View
+                key={row.label}
+                style={[
+                  styles.siteIdentityRow,
+                  { borderBottomColor: Colors.borderDefault },
+                  index === arr.length - 1 && { borderBottomWidth: 0 },
+                ]}
+              >
+                <View style={[styles.siteIdentityLabel, { backgroundColor: Colors.bgElevated }]}>
+                  <Text style={[styles.siteIdentityLabelText, { color: Colors.textMuted }]}>{row.label}</Text>
+                </View>
+                <View style={styles.siteIdentityValue}>
+                  <Text style={[styles.siteIdentityValueText, { color: Colors.textPrimary }]}>{row.value}</Text>
                 </View>
               </View>
-            )}
-            {assignment.status?.toLowerCase() === 'returned' && (
-              <View style={styles.timelineInlineItem}>
-                <View style={[styles.timelineInlineDot, { backgroundColor: Colors.warning }]} />
-                <View>
-                  <Text style={[styles.timelineInlineLabel, { color: Colors.textPrimary }]}>Returned</Text>
-                  <Text style={[styles.timelineInlineValue, { color: Colors.textMuted }]}>Awaiting Resubmission</Text>
-                </View>
-              </View>
-            )}
-            {assignment.dueDate && (
-              <View style={styles.timelineInlineItem}>
-                <View style={[styles.timelineInlineDot, { backgroundColor: Colors.danger }]} />
-                <View>
-                  <Text style={[styles.timelineInlineLabel, { color: Colors.textPrimary }]}>Deadline</Text>
-                  <Text style={[styles.timelineInlineValue, { color: Colors.primary }]}>{formatDate(assignment.dueDate)}</Text>
-                </View>
-              </View>
-            )}
+            ))}
           </View>
         </View>
 
-        {/* PDF Dropdown */}
-        <View style={[styles.pdfSection, { borderColor: Colors.borderDefault, backgroundColor: Colors.bgCard }]}>
-          <Pressable style={styles.pdfHeader} onPress={() => setPdfExpanded((prev) => !prev)}>
-            <View>
-              <Text style={[styles.pdfTitle, { color: Colors.textPrimary }]}>Documents & PDFs</Text>
-              <Text style={[styles.pdfSubtitle, { color: Colors.textMuted }]}>Offer letters, inspection packs, contracts</Text>
+        {/* PDF Documents — Fix 2: Independent Tile Cards */}
+        <View style={styles.pdfTilesRow}>
+          {pdfOptions.length === 0 ? (
+            <View style={[styles.pdfTile, { backgroundColor: Colors.bgCard, borderColor: Colors.borderDefault }]}>
+              <View style={[styles.pdfBadge, { backgroundColor: Colors.primaryGlow }]}>
+                <Text style={[styles.pdfBadgeText, { color: Colors.primary }]}>PDF</Text>
+              </View>
+              <Text style={[styles.pdfTileTitle, { color: Colors.textMuted }]}>No documents available</Text>
             </View>
-            <Text style={[styles.pdfChevron, { color: Colors.textSecondary }]}>{pdfExpanded ? '▴' : '▾'}</Text>
-          </Pressable>
-          {pdfExpanded && (
-            <View style={styles.pdfList}>
-              {pdfOptions.length === 0 ? (
-                <Text style={[styles.pdfEmptyText, { color: Colors.textMuted }]}>No documents available for this assignment.</Text>
-              ) : (
-                pdfOptions.map((doc) => (
-                  <View key={doc.id} style={[styles.pdfItem, { borderColor: Colors.borderDefault }]}> 
-                    <View style={styles.pdfItemInfo}>
-                      <View style={[styles.pdfBadge, { backgroundColor: Colors.primaryGlow }]}> 
-                        <Text style={[styles.pdfBadgeText, { color: Colors.primary }]}>PDF</Text>
-                      </View>
-                      <Text style={[styles.pdfItemTitle, { color: Colors.textPrimary }]}>{doc.title}</Text>
-                    </View>
-                    <View style={styles.pdfActions}>
-                      <Pressable onPress={() => handlePreview(doc)} style={[styles.pdfActionBtn, { borderColor: Colors.primary }]}> 
-                        <Text style={[styles.pdfActionText, { color: Colors.primary }]}>Preview</Text>
-                      </Pressable>
-                      <Pressable onPress={() => handleDownload(doc)} style={[styles.pdfActionBtn, { borderColor: Colors.textSecondary }]}> 
-                        {isDownloading ? (
-                          <ActivityIndicator size="small" color={Colors.textSecondary} />
-                        ) : (
-                          <Text style={[styles.pdfActionText, { color: Colors.textSecondary }]}>Download</Text>
-                        )}
-                      </Pressable>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
+          ) : (
+            pdfOptions.slice(0, 2).map((doc) => (
+              <Pressable key={doc.id} onPress={() => handlePreview(doc)} style={[styles.pdfTile, { backgroundColor: Colors.bgCard, borderColor: Colors.borderDefault }]}>
+                <View style={[styles.pdfBadge, { backgroundColor: Colors.primaryGlow }]}>
+                  <Text style={[styles.pdfBadgeText, { color: Colors.primary }]}>PDF</Text>
+                </View>
+                <Text style={[styles.pdfTileTitle, { color: Colors.textPrimary }]} numberOfLines={2}>{doc.title}</Text>
+                <Text style={[styles.pdfTileSize, { color: Colors.textMuted }]}>Document</Text>
+                <View style={styles.pdfTileActions}>
+                  <Pressable onPress={() => handlePreview(doc)} style={[styles.pdfTileBtn, { borderColor: Colors.primary }]}>
+                    <Text style={[styles.pdfTileBtnText, { color: Colors.primary }]}>View</Text>
+                  </Pressable>
+                  <Pressable onPress={() => handleDownload(doc)} style={[styles.pdfTileBtn, { borderColor: Colors.textSecondary }]}>
+                    {isDownloading ? (
+                      <ActivityIndicator size="small" color={Colors.textSecondary} />
+                    ) : (
+                      <Text style={[styles.pdfTileBtnText, { color: Colors.textSecondary }]}>↓</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </Pressable>
+            ))
           )}
         </View>
 
-        {/* Detailed Information Sections */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeader, { color: Colors.textMuted }]}>LOCATION & CONTACT</Text>
-          <DetailRow label="Site Address" value={assignment.siteAddress} color={Colors.textPrimary} labelColor={Colors.textSecondary} multiline />
-          <DetailRow label="Site City" value={assignment.siteCity} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
-          <DetailRow label="Contact Person" value={assignment.contactPerson} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
-          <DetailRow label="Contact Number" value={assignment.siteContactNumber} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
-          <DetailRow label="Branch Manager" value={assignment.branchManagerName} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
+        {/* Location & Contact — Fix 4: Wrapped in card */}
+        <View style={[styles.locationCard, { backgroundColor: Colors.bgCard, borderColor: Colors.borderDefault }]}>
+          <View style={styles.locationCardHeader}>
+            <GeometricIcon type="Location" size={18} color={Colors.primary} />
+            <Text style={[styles.locationCardTitle, { color: Colors.textPrimary }]}>Location & Contact</Text>
+          </View>
+          <View style={styles.locationFieldsList}>
+            {[
+              { label: 'SITE ADDRESS', value: assignment.siteAddress },
+              { label: 'SITE CITY', value: (assignment as any).siteCity || '—' },
+              { label: 'CONTACT PERSON', value: assignment.contactPerson },
+              { label: 'CONTACT NUMBER', value: (assignment as any).siteContactNumber || (assignment as any).contact_phone || '—' },
+              { label: 'BRANCH MANAGER', value: (assignment as any).branchManagerName || '—' },
+            ].map((item) => (
+              <View key={item.label} style={styles.locationFieldPair}>
+                <Text style={[styles.locationFieldLabel, { color: Colors.textMuted }]}>{item.label}</Text>
+                <Text style={[styles.locationFieldValue, { color: Colors.textPrimary }]}>{item.value || '—'}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeader, { color: Colors.textMuted }]}>INSPECTION PARAMETERS</Text>
-          <DetailRow label="Inspection Type" value={assignment.inspectionType} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
-          <DetailRow label="Scope" value={assignment.inspectionScope} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
-          <DetailRow label="Inventory Holding" value={`${assignment.inventoryHoldingDays} Days`} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
-          <DetailRow label="Past Inspections" value={assignment.totalInspectionsToDate.toString()} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
+        {/* Inspection Parameters — Fix 4: 2-column grid in card */}
+        <View style={[styles.paramsCard, { backgroundColor: Colors.bgCard, borderColor: Colors.borderDefault }]}>
+          <Text style={[styles.paramsCardTitle, { color: Colors.textPrimary }]}>Inspection Parameters</Text>
+          <View style={styles.paramsGrid}>
+            {[
+              { label: 'TYPE', value: (assignment as any).inspectionType || 'Standard' },
+              { label: 'SCOPE', value: (assignment as any).inspectionScope || '—' },
+              { label: 'INVENTORY', value: (assignment as any).inventoryHoldingDays ? `${(assignment as any).inventoryHoldingDays} Days` : '—' },
+              { label: 'PAST INSPECTIONS', value: (assignment as any).totalInspectionsToDate?.toString() || '0' },
+            ].map((param) => (
+              <View key={param.label} style={[styles.paramTile, { backgroundColor: Colors.bgElevated, borderColor: Colors.borderDefault }]}>
+                <Text style={[styles.paramTileLabel, { color: Colors.textMuted }]}>{param.label}</Text>
+                <Text style={[styles.paramTileValue, { color: Colors.textPrimary }]}>{param.value}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         {/* Operational Notes */}
@@ -471,21 +458,36 @@ const styles = StyleSheet.create({
     height: 1,
     marginBottom: 20,
   },
-  quickInfoGrid: {
-    flexDirection: 'row',
+  // Fix 3: Site Identity Grid
+  siteIdentityGrid: {
+    marginTop: 4,
   },
-  quickInfoItem: {
-    flex: 1,
+  siteIdentityRow: {
+    flexDirection: 'row' as const,
+    minHeight: 44,
+    borderBottomWidth: 1,
   },
-  quickLabel: {
-    fontSize: 9,
-    fontWeight: '800',
+  siteIdentityLabel: {
+    width: 160,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    justifyContent: 'center' as const,
+  },
+  siteIdentityLabelText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
     letterSpacing: 1,
-    marginBottom: 4,
+    textTransform: 'uppercase' as const,
   },
-  quickValue: {
+  siteIdentityValue: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    justifyContent: 'center' as const,
+  },
+  siteIdentityValueText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600' as const,
   },
   rejectionBox: {
     borderRadius: 16,
@@ -494,8 +496,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   rejectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     marginBottom: 10,
     gap: 8,
   },
@@ -504,45 +506,151 @@ const styles = StyleSheet.create({
   },
   rejectionTitle: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '800' as const,
     letterSpacing: 1,
   },
   rejectionMsg: {
     fontSize: 14,
-    fontWeight: '600',
-    fontStyle: 'italic',
+    fontWeight: '600' as const,
+    fontStyle: 'italic' as const,
     lineHeight: 22,
     marginBottom: 8,
   },
   rejectionFooter: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '500' as const,
   },
   section: {
     marginBottom: 32,
   },
   sectionHeader: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '800' as const,
     letterSpacing: 1.5,
     marginBottom: 16,
-    textTransform: 'uppercase',
+    textTransform: 'uppercase' as const,
   },
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
     marginBottom: 16,
   },
   label: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '500' as const,
   },
   value: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     flex: 1,
-    textAlign: 'right',
+    textAlign: 'right' as const,
     marginLeft: 20,
+  },
+  // Fix 2: PDF Tile Cards
+  pdfTilesRow: {
+    flexDirection: 'row' as const,
+    gap: 12,
+    marginBottom: 24,
+  },
+  pdfTile: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 16,
+    gap: 10,
+    alignItems: 'center' as const,
+  },
+  pdfTileTitle: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    textAlign: 'center' as const,
+  },
+  pdfTileSize: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+  },
+  pdfTileActions: {
+    flexDirection: 'row' as const,
+    gap: 8,
+    marginTop: 4,
+  },
+  pdfTileBtn: {
+    borderRadius: 10,
+    borderWidth: 1.2,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  pdfTileBtnText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+  },
+  // Fix 4: Location Card
+  locationCard: {
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 24,
+    marginBottom: 24,
+  },
+  locationCardHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    marginBottom: 20,
+  },
+  locationCardTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+  },
+  locationFieldsList: {
+    gap: 14,
+  },
+  locationFieldPair: {
+    gap: 4,
+  },
+  locationFieldLabel: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
+  },
+  locationFieldValue: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+  },
+  // Fix 4: Params Card
+  paramsCard: {
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 24,
+    marginBottom: 24,
+  },
+  paramsCardTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    marginBottom: 16,
+  },
+  paramsGrid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 10,
+  },
+  paramTile: {
+    minWidth: '46%' as any,
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    gap: 4,
+  },
+  paramTileLabel: {
+    fontSize: 9,
+    fontWeight: '800' as const,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
+  },
+  paramTileValue: {
+    fontSize: 14,
+    fontWeight: '700' as const,
   },
   notesBox: {
     borderRadius: 16,

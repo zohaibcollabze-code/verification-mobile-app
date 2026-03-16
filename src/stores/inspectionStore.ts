@@ -82,6 +82,8 @@ export const useInspectionStore = create<InspectionStoreState>((set, get) => ({
           submittedAt: null,
           cachedAt: now,
           updatedAt: now,
+          gpsLatitude: null,
+          gpsLongitude: null,
         };
         InspectionsDB.saveInspection(existing);
       }
@@ -132,8 +134,18 @@ export const useInspectionStore = create<InspectionStoreState>((set, get) => ({
     const state = get();
     if (!state.activeInspection) return;
     const now = new Date().toISOString();
+    const gps = state.gps;
+    
     InspectionsDB.updateStatus(state.activeInspection.localId, 'submitted', 'pending_upload');
-    InspectionsDB.saveInspection({ ...state.activeInspection, status: 'submitted', syncStatus: 'pending_upload', updatedAt: now, submittedAt: now } as Omit<InspectionRecord, 'id'>);
+    InspectionsDB.saveInspection({ 
+      ...state.activeInspection, 
+      status: 'submitted', 
+      syncStatus: 'pending_upload', 
+      updatedAt: now, 
+      submittedAt: now,
+      gpsLatitude: gps?.latitude ?? null,
+      gpsLongitude: gps?.longitude ?? null,
+    });
     SyncQueueDB.addToQueue(state.activeInspection.localId);
     set({
       activeInspection: { ...state.activeInspection, status: 'submitted', syncStatus: 'pending_upload', submittedAt: now, updatedAt: now },

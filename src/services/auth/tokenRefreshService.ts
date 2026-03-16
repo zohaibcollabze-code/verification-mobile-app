@@ -1,7 +1,8 @@
-import { refreshAccessToken } from './tokenManager';
+import { refreshAccessToken, isTokenExpiringSoon } from './tokenManager';
 import { AppState, AppStateStatus } from 'react-native';
+import { getAccessToken } from '../storage/secureStorage';
 
-const REFRESH_INTERVAL = 14 * 60 * 1000;
+const REFRESH_INTERVAL = 10 * 60 * 1000; // conservative 10 minutes
 
 class TokenRefreshService {
   private intervalId: NodeJS.Timeout | null = null;
@@ -9,22 +10,14 @@ class TokenRefreshService {
   private isRunning = false;
 
   start() {
-    if (this.isRunning) {
-      if (__DEV__) {
-        console.log('[TokenRefreshService] Already running');
-      }
-      return;
-    }
+    if (this.isRunning) return;
 
     this.isRunning = true;
-    
     this.scheduleRefresh();
-    
     this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
     
-    if (__DEV__) {
-      console.log('[TokenRefreshService] Started - will refresh every 14 minutes');
-    }
+    // Initial check on start
+    this.checkAndRefreshIfNeeded();
   }
 
   stop() {
@@ -39,11 +32,19 @@ class TokenRefreshService {
     }
 
     this.isRunning = false;
-    
-    if (__DEV__) {
-      console.log('[TokenRefreshService] Stopped');
-    }
   }
+
+  private checkAndRefreshIfNeeded = async () => {
+    try {
+      const token = await getAccessToken();
+      if (token && isTokenExpiringSoon(token, 5)) {
+        if (__DEV__) console.log('[TokenRefreshService] Token expiring soon, refreshing proactively...');
+        await refreshAccessToken();
+      }
+    } catch (error) {
+      if (__DEV__) console.warn('[TokenRefreshService] Proactive refresh check failed:', error);
+    }
+  };
 
   private scheduleRefresh = () => {
     if (this.intervalId) {
@@ -53,20 +54,17 @@ class TokenRefreshService {
     this.intervalId = setInterval(async () => {
       try {
         await refreshAccessToken();
-        if (__DEV__) {
-          console.log('[TokenRefreshService] Token refreshed successfully');
-        }
+        if (__DEV__) console.log('[TokenRefreshService] Interval refresh successful');
       } catch (error) {
-        if (__DEV__) {
-          console.warn('[TokenRefreshService] Refresh failed:', error);
-        }
-        this.stop();
+        if (__DEV__) console.warn('[TokenRefreshService] Interval refresh failed:', error);
+        // Don't stop the service on interval failure, only on terminal auth failure
       }
     }, REFRESH_INTERVAL);
   };
 
   private handleAppStateChange = (nextAppState: AppStateStatus) => {
     if (nextAppState === 'active' && this.isRunning) {
+      this.checkAndRefreshIfNeeded();
       this.scheduleRefresh();
     } else if (nextAppState === 'background' || nextAppState === 'inactive') {
       if (this.intervalId) {

@@ -19,7 +19,9 @@ export function initDB(): void {
       submittedAt TEXT,
       cachedAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
-      encrypted INTEGER DEFAULT 0
+      encrypted INTEGER DEFAULT 0,
+      gpsLatitude REAL,
+      gpsLongitude REAL
     );
 
     CREATE TABLE IF NOT EXISTS inspection_photos (
@@ -67,4 +69,17 @@ export function initDB(): void {
       UNIQUE(assignmentId, action)
     );
   `);
+
+  // Migration for adding GPS columns to existing 'inspections' table
+  try {
+    db.execSync('ALTER TABLE inspections ADD COLUMN gpsLatitude REAL;');
+  } catch (error) {
+    // Column already exists, ignore
+  }
+
+  try {
+    db.execSync('ALTER TABLE inspections ADD COLUMN gpsLongitude REAL;');
+  } catch (error) {
+    // Column already exists, ignore
+  }
 }

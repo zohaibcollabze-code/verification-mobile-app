@@ -12,7 +12,7 @@ import { useThemeStore } from '@/stores/themeStore';
 import { GeometricIcon, IconType } from '@/components/ui/GeometricIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotifications } from '@/hooks/useNotifications';
-import { formatRelativeTime } from '@/utils/formatters';
+import { formatRelativeTime, formatFullDateTime } from '@/utils/formatters';
 
 type NotifCategory = 'ALL' | 'UNREAD' | 'SYSTEM' | 'PROJECTS';
 
@@ -73,11 +73,11 @@ export function NotificationsScreen() {
   const getIcon = (type: string): { type: IconType; bg: string; color: string } => {
     switch (type) {
       case 'SYSTEM_ALERT': return { type: 'Alert', bg: 'rgba(239,68,68,0.1)', color: Colors.danger };
-      case 'APPROVAL': return { type: 'Document', bg: 'rgba(37,99,235,0.1)', color: Colors.primary };
+      case 'APPROVAL': return { type: 'Document', bg: 'rgba(59,130,246,0.1)', color: Colors.primary };
       case 'SUCCESS': return { type: 'Check', bg: 'rgba(16,185,129,0.1)', color: Colors.success };
-      case 'PROJECTS': return { type: 'Briefcase', bg: 'rgba(37,99,235,0.1)', color: Colors.primary };
+      case 'PROJECTS': return { type: 'Briefcase', bg: 'rgba(59,130,246,0.1)', color: Colors.primary };
       case 'SYSTEM': return { type: 'Settings', bg: 'rgba(139,92,246,0.1)', color: '#A78BFA' };
-      default: return { type: 'Bell', bg: 'rgba(71,85,105,0.1)', color: Colors.textMuted };
+      default: return { type: 'Bell', bg: 'rgba(59,130,246,0.1)', color: Colors.primary };
     }
   };
 
@@ -131,12 +131,16 @@ export function NotificationsScreen() {
         )}
         renderItem={({ item }: { item: any }) => {
           const icon = getIcon(item.type);
+          const isGenericBody = !item.body || item.body.includes('New operational update');
+          const enrichedBody = (isGenericBody && item.assignment_ref) 
+            ? `New request ${item.assignment_ref} created for inspection.` 
+            : (item.body || 'New operational update received.');
+
           return (
             <Pressable
               onPress={() => {
                 markAsRead(item.id);
                 if (item.assignment_id) {
-                  // Robust navigation: Try parent (RootStack) or self
                   const nav = navigation.getParent() || navigation;
                   nav.navigate('AssignmentDetail', { requestId: item.assignment_id });
                 }
@@ -144,7 +148,7 @@ export function NotificationsScreen() {
               style={[
                 styles.notifItem,
                 { borderBottomColor: Colors.borderDefault },
-                !item.read && { backgroundColor: themeMode === 'dark' ? 'rgba(37,99,235,0.05)' : 'rgba(37,99,235,0.03)' }
+                !item.read && { backgroundColor: themeMode === 'dark' ? 'rgba(37,99,235,0.05)' : 'rgba(37,99,235,0.02)' }
               ]}
             >
               <View style={[styles.iconCircle, { backgroundColor: icon.bg }]}>
@@ -154,21 +158,25 @@ export function NotificationsScreen() {
               <View style={styles.content}>
                 <View style={styles.titleRow}>
                   <Text style={[styles.notifTitle, { color: Colors.textPrimary }]}>{item.title}</Text>
-                  <Text style={[styles.notifTime, { color: Colors.textMuted }]}>
-                    {item.time ? formatRelativeTime(item.time) : 'NOW'}
-                  </Text>
+                  <View style={styles.titleRightGroup}>
+                    {item.read ? (
+                      <GeometricIcon type="Check" size={16} color={Colors.primary} />
+                    ) : (
+                      <View style={[styles.newBadge, { backgroundColor: Colors.primary }]}>
+                        <Text style={styles.newBadgeText}>NEW</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-                <Text
-                  style={[styles.notifBody, { color: Colors.textSecondary }]}
-                >
-                  {item.body || 'New operational update received.'}
+                <Text style={[styles.notifBody, { color: Colors.textSecondary }]}>
+                  {enrichedBody}
+                </Text>
+                <Text style={[styles.notifTime, { color: Colors.textMuted }]}>
+                  {item.time ? formatFullDateTime(item.time) : 'NOW'}
                 </Text>
 
-                {item.assignment_ref && (
-                  <View style={[styles.refBadge, { backgroundColor: Colors.bgInput, borderColor: Colors.borderDefault }]}>
-                    <GeometricIcon type="Document" size={10} color={Colors.primary} />
-                    <Text style={[styles.refText, { color: Colors.primary }]}>REF: {item.assignment_ref}</Text>
-                  </View>
+                {item.assignment_id && (
+                  <Text style={[styles.viewJobLink, { color: Colors.primary }]}>View Job →</Text>
                 )}
               </View>
             </Pressable>
@@ -350,5 +358,39 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-  }
+  },
+  // Fix 10: Notification indicators
+  dotColumn: {
+    width: 16,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 6,
+    marginRight: 4,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  titleRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  newBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  newBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  viewJobLink: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
 });

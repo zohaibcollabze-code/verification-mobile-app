@@ -19,8 +19,10 @@ export function saveInspection(record: Omit<InspectionRecord, 'id'>): void {
         schemaSnapshot,
         submittedAt,
         cachedAt,
-        updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        updatedAt,
+        gpsLatitude,
+        gpsLongitude
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [
         record.localId,
         record.serverId,
@@ -33,6 +35,8 @@ export function saveInspection(record: Omit<InspectionRecord, 'id'>): void {
         record.submittedAt,
         record.cachedAt,
         record.updatedAt,
+        record.gpsLatitude,
+        record.gpsLongitude,
       ],
     );
   } catch (error) {

@@ -102,3 +102,27 @@ export function formatCountdown(totalSeconds: number): string {
   const secs = totalSeconds % 60;
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
+
+/**
+ * Format date and time for notifications.
+ * @param isoDate - ISO timestamp
+ * @returns Formatted like "16 Mar 2026, 15:01"
+ */
+export function formatFullDateTime(isoDate: string | Date | null | undefined): string {
+  if (!isoDate) return '—';
+  try {
+    const date = isoDate instanceof Date ? isoDate : new Date(isoDate);
+    if (isNaN(date.getTime())) return '—';
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const d = date.getDate();
+    const m = months[date.getMonth()];
+    const y = date.getFullYear();
+    const h = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    
+    return `${d} ${m} ${y}, ${h}:${min}`;
+  } catch {
+    return '—';
+  }
+}

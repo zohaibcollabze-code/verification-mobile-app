@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
 import { useColors } from '@/constants/colors';
 import { StatusBadge } from '@/components/ui/Badge';
 import type { RequestModel } from '@/services/api/types/requestTypes';
@@ -40,6 +40,25 @@ export function AssignmentCard({ assignment, onPress, hasDraft, syncStatus = 'no
   const displayDate = assignment.dueDate || assignment.thisInspectionDate || assignment.createdAt;
   const syncMeta = syncStatus !== 'none' ? SYNC_BADGE_META[syncStatus as SyncBadgeKey] : null;
   const SyncBadgeWrapper = syncStatus === 'conflict' && onConflictPress ? Pressable : View;
+  const fieldData = assignment.fieldData || {};
+  const isUrgent = assignment.isUrgent === true || fieldData.isUrgent === true || fieldData.urgent === true;
+  const urgencyReason = assignment.urgencyReason || fieldData.urgencyReason || fieldData.urgency_reason || '';
+  const writtenOfferUrl = assignment.writtenOfferUrl || fieldData.writtenOfferUrl || fieldData.offerLetterUrl || fieldData.written_offer_url;
+  const noticeOfDeliveryUrl = assignment.noticeOfDeliveryUrl || fieldData.noticeOfDeliveryUrl || fieldData.notice_of_delivery_url;
+  const declarationDateRaw = fieldData.dateOfDeclaration || fieldData.date_of_declaration;
+  const declarationDate = declarationDateRaw ? formatDate(declarationDateRaw) : null;
+
+  const handleOpenUrl = async (url?: string) => {
+    if (!url) return;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      }
+    } catch (error) {
+      console.warn('[AssignmentCard] Failed to open url', error);
+    }
+  };
 
   return (
     <Pressable
@@ -57,6 +76,11 @@ export function AssignmentCard({ assignment, onPress, hasDraft, syncStatus = 'no
         </View>
         <View style={styles.headerActions}>
           <StatusBadge status={assignment.status as any} />
+          {isUrgent && (
+            <View style={[styles.urgentBadge, { backgroundColor: Colors.dangerSoft, borderColor: Colors.danger }]}>
+              <Text style={[styles.urgentBadgeLabel, { color: Colors.danger }]}>URGENT</Text>
+            </View>
+          )}
           {syncMeta && (
             <SyncBadgeWrapper
               onPress={syncStatus === 'conflict' ? onConflictPress : undefined}
@@ -70,6 +94,11 @@ export function AssignmentCard({ assignment, onPress, hasDraft, syncStatus = 'no
       </View>
 
       <View style={styles.details}>
+        {!!urgencyReason && (
+          <Text style={[styles.urgencyReasonText, { color: Colors.danger }]} numberOfLines={1}>
+            {urgencyReason}
+          </Text>
+        )}
         <Text style={[styles.bank, { color: Colors.textPrimary }]}>
           {assignment.bankName}
         </Text>
@@ -77,6 +106,32 @@ export function AssignmentCard({ assignment, onPress, hasDraft, syncStatus = 'no
           {assignment.siteCity}, {assignment.siteAddress}
         </Text>
       </View>
+
+      {(writtenOfferUrl || noticeOfDeliveryUrl) && (
+        <View style={styles.docRow}>
+          {writtenOfferUrl && (
+            <Pressable
+              onPress={() => handleOpenUrl(writtenOfferUrl)}
+              style={[styles.docPill, { borderColor: Colors.primary }]}
+            >
+              <Text style={[styles.docPillLabel, { color: Colors.primary }]}>Written Offer</Text>
+            </Pressable>
+          )}
+          {noticeOfDeliveryUrl && (
+            <Pressable
+              onPress={() => handleOpenUrl(noticeOfDeliveryUrl)}
+              style={[styles.docPill, { borderColor: Colors.warning }]}
+            >
+              <View>
+                <Text style={[styles.docPillLabel, { color: Colors.warning }]}>Notice of Delivery</Text>
+                {declarationDate && (
+                  <Text style={[styles.docPillMeta, { color: Colors.textMuted }]}>Declared {declarationDate}</Text>
+                )}
+              </View>
+            </Pressable>
+          )}
+        </View>
+      )}
 
       <View style={styles.footer}>
         <View>
@@ -107,6 +162,25 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+  urgentBadge: {
+    alignSelf: 'flex-end',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  urgentBadgeLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  urgencyReasonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+    fontStyle: 'italic',
   },
   header: {
     flexDirection: 'row',
@@ -140,6 +214,26 @@ const styles = StyleSheet.create({
   location: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  docRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  docPill: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  docPillLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  docPillMeta: {
+    fontSize: 10,
+    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',

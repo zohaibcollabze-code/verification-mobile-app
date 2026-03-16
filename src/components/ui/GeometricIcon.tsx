@@ -24,7 +24,9 @@ export type IconType =
   | 'Smartphone'
   | 'User'
   | 'Award'
-  | 'Shield';
+  | 'Shield'
+  | 'Location'
+  | 'MapPin';
 
 interface GeometricIconProps {
   type: IconType;
@@ -178,6 +180,14 @@ export const GeometricIcon: React.FC<GeometricIconProps> = ({
       case 'Shield':
         return (
           <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke={color} strokeWidth={strokeWidth} fill="none" strokeLinejoin="round" />
+        );
+      case 'Location':
+      case 'MapPin':
+        return (
+          <>
+            <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke={color} strokeWidth={strokeWidth} fill="none" />
+            <Circle cx="12" cy="10" r="3" stroke={color} strokeWidth={strokeWidth} fill="none" />
+          </>
         );
       default:
         return null;

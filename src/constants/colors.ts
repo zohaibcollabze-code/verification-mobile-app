@@ -74,6 +74,22 @@ export const DarkColors = {
   dark800: DARK_800,
   dark900: DARK_900,
   dark950: DARK_950,
+
+  // Radar Chart tokens (Fix 9)
+  radarBg: 'rgba(15, 23, 42, 0.6)',
+  radarGrid: 'rgba(148, 163, 184, 0.15)',
+  radarSpoke: 'rgba(148, 163, 184, 0.12)',
+  radarFill: 'rgba(59, 130, 246, 0.25)',
+  radarStroke: '#3B82F6',
+  radarLabel: '#94A3B8',
+
+  // Status Badge tokens (Fix 5)
+  pendingBadgeBg: 'rgba(245, 158, 11, 0.12)',
+  pendingBadgeText: '#FBBF24',
+  inProgressBadgeBg: 'rgba(99, 102, 241, 0.12)',
+  inProgressBadgeText: '#818CF8',
+  completedBadgeBg: 'rgba(16, 185, 129, 0.12)',
+  completedBadgeText: '#34D399',
 } as const;
 
 // ─── Semantic Aliases (Light) ─────────────────────────────
@@ -121,6 +137,22 @@ export const LightColors = {
   dark800: '#1E293B',
   dark900: '#0F172A',
   dark950: '#0B1221',
+
+  // Radar Chart tokens (Fix 9)
+  radarBg: 'rgba(248, 250, 252, 0.6)',
+  radarGrid: 'rgba(100, 116, 139, 0.2)',
+  radarSpoke: 'rgba(100, 116, 139, 0.15)',
+  radarFill: 'rgba(37, 99, 235, 0.2)',
+  radarStroke: '#2563EB',
+  radarLabel: '#475569',
+
+  // Status Badge tokens (Fix 5)
+  pendingBadgeBg: 'rgba(245, 158, 11, 0.1)',
+  pendingBadgeText: '#D97706',
+  inProgressBadgeBg: 'rgba(99, 102, 241, 0.1)',
+  inProgressBadgeText: '#4F46E5',
+  completedBadgeBg: 'rgba(16, 185, 129, 0.1)',
+  completedBadgeText: '#059669',
 } as const;
 
 /** 
@@ -136,7 +168,7 @@ export function useColors() {
     // Uppercase keys (legacy / API style)
     COMPLETED: { bg: 'rgba(16, 185, 129, 0.1)', text: SUCCESS, bar: SUCCESS },
     NEW: { bg: 'rgba(37, 99, 235, 0.1)', text: PRIMARY, bar: PRIMARY },
-    ASSIGNED: { bg: 'rgba(37, 99, 235, 0.1)', text: PRIMARY, bar: PRIMARY },
+    ASSIGNED: { bg: 'rgba(14, 165, 233, 0.12)', text: '#0EA5E9', bar: '#0891B2' },
     ACCEPTED: { bg: 'rgba(16, 185, 129, 0.1)', text: SUCCESS, bar: SUCCESS },
     IN_PROGRESS: { bg: 'rgba(37, 99, 235, 0.1)', text: PRIMARY, bar: '#38BDF8' },
     SUBMITTED: { bg: 'rgba(245, 158, 11, 0.1)', text: WARNING, bar: WARNING },
@@ -147,7 +179,7 @@ export function useColors() {
     FAILED: { bg: 'rgba(239, 68, 68, 0.1)', text: DANGER, bar: DANGER },
     // Lowercase keys (normalized status from backend)
     new: { bg: 'rgba(37, 99, 235, 0.1)', text: PRIMARY, bar: PRIMARY },
-    assigned: { bg: 'rgba(37, 99, 235, 0.1)', text: PRIMARY, bar: PRIMARY },
+    assigned: { bg: 'rgba(14, 165, 233, 0.12)', text: '#0EA5E9', bar: '#0891B2' },
     accepted: { bg: 'rgba(16, 185, 129, 0.1)', text: SUCCESS, bar: SUCCESS },
     in_progress: { bg: 'rgba(37, 99, 235, 0.1)', text: PRIMARY, bar: '#38BDF8' },
     submitted: { bg: 'rgba(245, 158, 11, 0.1)', text: WARNING, bar: WARNING },

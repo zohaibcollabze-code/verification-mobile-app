@@ -1,17 +1,14 @@
-/**
- * AUTHENTICATION CONTEXT — Dual-Token Architecture
- * Provides secure access token management with automatic refresh.
- * All API calls must use getValidAccessToken() instead of direct token access.
- */
 import React, { createContext, useContext, useCallback, useRef, ReactNode } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-import { AuthError } from '@/types/auth';
+import { getAccessToken } from '@/services/storage/secureStorage';
+import { refreshAccessToken, isTokenExpiringSoon } from './tokenManager';
+import { AppException } from '@/utils/exceptions';
 
 interface AuthContextType {
   /** Returns a valid access token, refreshing if necessary */
   getValidAccessToken: () => Promise<string | null>;
   /** Force refresh of access token */
-  refreshAccessToken: () => Promise<void>;
+  refreshAccessToken: () => Promise<string>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -21,48 +18,40 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const authStore = useAuthStore();
-  const refreshPromiseRef = useRef<Promise<void> | null>(null);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const refreshPromiseRef = useRef<Promise<string> | null>(null);
 
   const getValidAccessToken = useCallback(async (): Promise<string | null> => {
     try {
-      // Check if we have a valid session
-      if (authStore.status !== 'authenticated') {
-        return null;
+      if (!isAuthenticated) return null;
+
+      const token = await getAccessToken();
+      if (!token) return null;
+
+      // Check if token is expiring (5 min buffer)
+      if (isTokenExpiringSoon(token, 5)) {
+        if (__DEV__) console.log('[AuthContext] Token expiring soon, refreshing...');
+        return await refreshAccessTokenInternal();
       }
 
-      // Check if access token is still valid (with 30s buffer)
-      const now = Date.now();
-      const tokenValid = authStore.accessToken &&
-        (authStore.accessToken.expiresAt > now + 30000); // 30 seconds buffer
-
-      if (tokenValid) {
-        return authStore.accessToken.token;
-      }
-
-      // Token expired, trigger refresh
-      await refreshAccessToken();
-      return authStore.accessToken?.token || null;
+      return token;
     } catch (error) {
       console.error('[AuthContext] getValidAccessToken failed:', error);
-      throw error;
+      return null;
     }
-  }, [authStore.status, authStore.accessToken]);
+  }, [isAuthenticated]);
 
-  const refreshAccessToken = useCallback(async (): Promise<void> => {
-    // Prevent concurrent refresh attempts (refresh lock)
+  const refreshAccessTokenInternal = useCallback(async (): Promise<string> => {
     if (refreshPromiseRef.current) {
       return refreshPromiseRef.current;
     }
 
     refreshPromiseRef.current = (async () => {
       try {
-        await authStore.refreshTokens();
+        const newToken = await refreshAccessToken();
+        return newToken;
       } catch (error) {
-        // If refresh fails, logout user
-        if (error instanceof AuthError && error.code === 'INVALID_REFRESH_TOKEN') {
-          await authStore.logout();
-        }
+        if (__DEV__) console.warn('[AuthContext] Refresh failed:', error);
         throw error;
       } finally {
         refreshPromiseRef.current = null;
@@ -70,11 +59,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     })();
 
     return refreshPromiseRef.current;
-  }, [authStore]);
+  }, []);
 
   const contextValue: AuthContextType = {
     getValidAccessToken,
-    refreshAccessToken,
+    refreshAccessToken: refreshAccessTokenInternal,
   };
 
   return (

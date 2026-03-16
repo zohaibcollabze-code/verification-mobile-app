@@ -35,6 +35,7 @@ export async function runSync(): Promise<void> {
     const items = SyncQueueDB.getDueItems();
     if (!items.length && !assignmentActions.length) {
       networkState.setSyncStatus('idle');
+      isSyncing = false;
       return;
     }
 
@@ -62,15 +63,6 @@ export async function runSync(): Promise<void> {
 
 async function syncSingleInspection(inspectionLocalId: string): Promise<boolean> {
   try {
-    const pendingPhotos = PhotosDB.getPendingPhotos(inspectionLocalId);
-    for (const photo of pendingPhotos) {
-      const uploaded = await uploadSinglePhoto(photo);
-      if (!uploaded) {
-        SyncQueueDB.recordAttempt(inspectionLocalId, 'Photo upload failed');
-        return false;
-      }
-    }
-
     const inspection = InspectionsDB.getByLocalId(inspectionLocalId);
     if (!inspection) {
       SyncQueueDB.removeFromQueue(inspectionLocalId);
@@ -78,28 +70,51 @@ async function syncSingleInspection(inspectionLocalId: string): Promise<boolean>
     }
 
     const allPhotos = PhotosDB.getPhotosByInspection(inspectionLocalId);
-    const formData = JSON.parse(inspection.formData || '{}');
-    replacePhotoUris(formData, allPhotos);
+    const formDataJson = JSON.parse(inspection.formData || '{}');
 
-    const payload = {
-      localId: inspection.localId,
-      assignmentId: inspection.assignmentId,
-      inspectorId: inspection.inspectorId,
-      status: inspection.status,
-      formData,
-      submittedAt: inspection.submittedAt,
-    };
+    // Build Multipart Payload matching findingsService logic
+    const formData = new FormData();
+    formData.append('findingData', JSON.stringify(formDataJson));
+    formData.append('overallStatus', formDataJson.overall_inspection_status || 'satisfactory');
+    
+    if (inspection.gpsLatitude && inspection.gpsLongitude) {
+      formData.append('gpsLatitude', inspection.gpsLatitude.toString());
+      formData.append('gpsLongitude', inspection.gpsLongitude.toString());
+    }
 
-    const response = await apiClient.post('/inspections', payload);
+    // Attach all photos to their respective fields
+    for (const photo of allPhotos) {
+      if (photo.localUri) {
+        const filename = `${photo.fieldId || 'general'}_${Date.now()}.jpg`;
+        // @ts-ignore
+        formData.append(photo.fieldId || 'general', {
+          uri: photo.localUri,
+          name: filename,
+          type: 'image/jpeg',
+        });
+      }
+    }
+
+    const response = await apiClient.post(`/inspections/${inspection.assignmentId}/submit-findings`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 180000,
+    });
+
     if (response.status === 200 || response.status === 201) {
       const serverId = response.data?.data?.id ?? response.data?.id;
       if (serverId) {
         InspectionsDB.markSynced(inspectionLocalId, serverId);
       }
       SyncQueueDB.removeFromQueue(inspectionLocalId);
+      
+      // Clean up local photos after successful sync
       for (const photo of allPhotos) {
         if (photo.localUri) {
-          await deleteLocalPhoto(photo.localUri);
+          try {
+            await deleteLocalPhoto(photo.localUri);
+          } catch (e) {
+            console.warn('[SyncEngine] Failed to delete synced local photo', e);
+          }
         }
       }
       return true;
@@ -107,52 +122,25 @@ async function syncSingleInspection(inspectionLocalId: string): Promise<boolean>
 
     return false;
   } catch (error: any) {
+    console.error('[SyncEngine] Sync failed for', inspectionLocalId, error?.message);
     const status = error?.response?.status;
+    
     if (status === 409) {
+      // Resource conflict, usually already submitted
       InspectionsDB.markConflict(inspectionLocalId);
       SyncQueueDB.removeFromQueue(inspectionLocalId);
       return false;
     }
+    
     if (status === 404) {
+      // Assignment or resource not found on server
       InspectionsDB.markServerDeleted(inspectionLocalId);
       SyncQueueDB.removeFromQueue(inspectionLocalId);
       return false;
     }
 
+    // Record attempt for retry later
     SyncQueueDB.recordAttempt(inspectionLocalId, error?.message || 'Sync failed');
-    return false;
-  }
-}
-
-async function uploadSinglePhoto(photo: InspectionPhoto): Promise<boolean> {
-  if (!photo.localUri) {
-    return true;
-  }
-
-  try {
-    const formData = new FormData();
-    formData.append('inspectionLocalId', photo.inspectionLocalId);
-    formData.append('fieldId', photo.fieldId);
-    formData.append('file', {
-      uri: photo.localUri,
-      type: 'image/jpeg',
-      name: `photo_${photo.fieldId}_${Date.now()}.jpg`,
-    } as any);
-
-    const response = await apiClient.post('/inspections/photos', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-
-    const serverUri = response.data?.data?.uri ?? response.data?.uri;
-    if (serverUri) {
-      PhotosDB.markPhotoUploaded(photo.localId, serverUri);
-    }
-    return true;
-  } catch (error) {
-    console.warn('[SyncEngine] Photo upload failed', error);
-    PhotosDB.markPhotoFailed(photo.localId);
     return false;
   }
 }
@@ -177,6 +165,7 @@ async function syncAssignmentAction(action: any): Promise<boolean> {
   } catch (error: any) {
     const status = error?.response?.status;
     if (status === 404 || status === 409) {
+      // Terminal failure for this action
       AssignmentActionsDB.removeAssignmentAction(action.assignmentId, action.action);
       return false;
     }
@@ -187,37 +176,5 @@ async function syncAssignmentAction(action: any): Promise<boolean> {
       error?.message || 'Action sync failed'
     );
     return false;
-  }
-}
-
-function replacePhotoUris(formData: any, photos: InspectionPhoto[]): void {
-  if (!formData || typeof formData !== 'object') {
-    return;
-  }
-
-  const serverUriMap = new Map<string, string>();
-  photos.forEach((photo) => {
-    if (photo.fieldId && photo.serverUri) {
-      serverUriMap.set(photo.fieldId, photo.serverUri);
-    }
-  });
-
-  const stack: any[] = [formData];
-  while (stack.length) {
-    const current = stack.pop();
-    if (Array.isArray(current)) {
-      current.forEach((item) => stack.push(item));
-    } else if (current && typeof current === 'object') {
-      Object.keys(current).forEach((key) => {
-        if (typeof current[key] === 'string' && current[key].startsWith('file://')) {
-          const mapped = serverUriMap.get(key);
-          if (mapped) {
-            current[key] = mapped;
-          }
-        } else if (typeof current[key] === 'object') {
-          stack.push(current[key]);
-        }
-      });
-    }
   }
 }

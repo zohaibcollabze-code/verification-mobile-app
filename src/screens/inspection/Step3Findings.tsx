@@ -138,26 +138,42 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
     // ── Dynamic Fields Card ───────────────────────────
     card: {
       backgroundColor: colors.bgCard,
-      borderRadius: 24, // Increased to 24px for premium consistency
+      borderRadius: 24,
       padding: 24,
       borderWidth: 1.5,
       borderColor: colors.borderDefault,
       marginBottom: 32,
     },
+    fieldCheckList: {
+      gap: 16,
+    },
     fieldWrapper: {
-      paddingVertical: 14,
-      marginBottom: 14,
+      paddingVertical: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.borderDefault,
     },
     fieldWrapperFirst: {
       paddingTop: 0,
-      marginTop: 4,
     },
     fieldWrapperLast: {
-      marginBottom: 0,
       paddingBottom: 0,
       borderBottomWidth: 0,
+    },
+    remarksCard: {
+      backgroundColor: colors.bgCard,
+      borderRadius: 24,
+      padding: 24,
+      paddingBottom: 24,
+      borderWidth: 1.5,
+      borderColor: colors.borderDefault,
+      marginBottom: 32,
+    },
+    saveRow: {
+      alignItems: 'flex-end',
+      marginTop: 16,
+    },
+    saveBtn: {
+      minWidth: 140,
     },
     cardHeaderTitle: {
       fontSize: 10,
@@ -260,37 +276,49 @@ export default function Step3Findings({ onNext, onBack, requestId }: Props) {
         {/* Dynamic Schema Fields Card */}
         <View style={styles.card}>
           <Text style={styles.cardHeaderTitle}>FIELD CHECKS</Text>
-          {visibleSchema.length > 0 ? visibleSchema.map((field, index) => (
-            <View
-              key={field.key}
-              style={[
-                styles.fieldWrapper,
-                index === 0 && styles.fieldWrapperFirst,
-                index === visibleSchema.length - 1 && styles.fieldWrapperLast,
-              ]}
-            >
-              <DynamicField
-                field={field}
-                value={formData[field.key]}
-                onChange={(val) => handleFieldChange(field.key, val)}
-              />
-            </View>
-          )) : (
-            <Text style={styles.emptyHint}>No dynamic fields configured for this job type.</Text>
-          )}
+          <View style={styles.fieldCheckList}>
+            {visibleSchema.length > 0 ? visibleSchema.map((field, index) => (
+              <View
+                key={field.key}
+                style={[
+                  styles.fieldWrapper,
+                  index === 0 && styles.fieldWrapperFirst,
+                  index === visibleSchema.length - 1 && styles.fieldWrapperLast,
+                ]}
+              >
+                <DynamicField
+                  field={field}
+                  value={formData[field.key]}
+                  onChange={(val) => handleFieldChange(field.key, val)}
+                />
+              </View>
+            )) : (
+              <Text style={styles.emptyHint}>No dynamic fields configured for this job type.</Text>
+            )}
+          </View>
         </View>
 
         {/* Remarks */}
-        <Text style={styles.sectionTitle}>Final Technical Remarks</Text>
-        <View style={styles.remarksContainer}>
-          <Input
-            placeholder="Detail any critical observations or remediation steps..."
-            value={remarks}
-            onChangeText={(val) => updateField('remarks', val)}
-            multiline
-            inputHeight={160}
-            textAlignVertical="top"
-          />
+        <View style={styles.remarksCard}>
+          <Text style={styles.sectionTitle}>Final Technical Remarks</Text>
+          <View style={styles.remarksContainer}>
+            <Input
+              placeholder="Detail any critical observations or remediation steps..."
+              value={remarks}
+              onChangeText={(val) => updateField('remarks', val)}
+              multiline
+              inputHeight={160}
+              textAlignVertical="top"
+            />
+          </View>
+          <View style={styles.saveRow}>
+            <Button
+              title="Save Progress"
+              variant="outline"
+              onPress={() => {}}
+              style={styles.saveBtn}
+            />
+          </View>
         </View>
 
       </ScrollView>

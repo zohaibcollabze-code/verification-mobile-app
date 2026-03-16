@@ -187,6 +187,21 @@ export function AssignmentsScreen() {
     const gradientColors: [string, string] = themeMode === 'dark'
       ? ['#1C1B2E', '#11101E']
       : ['#FFFFFF', '#F6F5FF'];
+    const donutTheme = themeMode === 'dark'
+      ? {
+          trackBorder: 'rgba(148, 163, 184, 0.25)',
+          trackBg: 'rgba(12, 15, 30, 0.85)',
+          centerBg: Colors.bgCard,
+          centerBorder: 'rgba(148, 163, 184, 0.35)',
+          centerShadow: 'rgba(5, 8, 16, 0.9)',
+        }
+      : {
+          trackBorder: 'rgba(15, 23, 42, 0.08)',
+          trackBg: 'rgba(241, 245, 249, 0.9)',
+          centerBg: Colors.white,
+          centerBorder: 'rgba(15, 23, 42, 0.08)',
+          centerShadow: 'rgba(15, 23, 42, 0.12)',
+        };
 
     let currentRotation = -90; // start at top
     const donutSlices = donutSegments.map((segment) => {
@@ -209,17 +224,13 @@ export function AssignmentsScreen() {
         <View style={styles.statsCardHeader}>
           <View>
             <Text style={[styles.statsTitle, { color: Colors.textPrimary }]}>Inspection Radar</Text>
-            <Text style={[styles.statsSubtitle, { color: Colors.textMuted }]}>Live job distribution</Text>
-          </View>
-          <View style={[styles.pendingFlag, { backgroundColor: pendingSegment.color + '25' }]}> 
-            <Text style={[styles.pendingFlagLabel, { color: pendingSegment.color }]}>PENDING</Text>
-            <Text style={[styles.pendingFlagValue, { color: pendingSegment.color }]}>{pendingSegment.value}</Text>
           </View>
         </View>
 
+
         <View style={styles.donutRow}>
           <View style={styles.donutWrapper}>
-            <View style={styles.donutBase}>
+            <View style={[styles.donutBase, { borderColor: donutTheme.trackBorder, backgroundColor: donutTheme.trackBg }]}>
               {donutSlices.map((slice) => (
                 <View key={slice.label} style={[styles.donutSliceWrapper, { transform: [{ rotate: `${slice.start}deg` }] }]}> 
                   <View
@@ -234,7 +245,16 @@ export function AssignmentsScreen() {
                   />
                 </View>
               ))}
-              <View style={styles.donutCenter}>
+              <View
+                style={[
+                  styles.donutCenter,
+                  {
+                    backgroundColor: donutTheme.centerBg,
+                    borderColor: donutTheme.centerBorder,
+                    shadowColor: donutTheme.centerShadow,
+                  },
+                ]}
+              >
                 <Text style={[styles.donutValue, { color: Colors.textPrimary }]}>{derivedStats.total}</Text>
                 <Text style={[styles.donutLabel, { color: Colors.textMuted }]}>Total</Text>
               </View>
@@ -399,7 +419,9 @@ const styles = StyleSheet.create({
   avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 14, fontWeight: '800' },
   controlsSection: {
-    paddingHorizontal: 24,
+    // backgroundColor: 'red',
+    paddingHorizontal: 4,
+    marginHorizontal: -12,
     paddingTop: 8,
     paddingBottom: 16,
     gap: 12,
@@ -409,10 +431,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 16,
     paddingHorizontal: 16,
-    height: 52,
+    height: 44,
     borderWidth: 1.5,
+    width: '100%',
   },
-  searchIcon: { fontSize: 16, marginRight: 12 },
+  searchIcon: { marginRight: 12 },
   searchInput: { flex: 1, fontSize: 15 },
   filterScrollWrapper: {
     marginTop: 4,
@@ -431,7 +454,7 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 24, paddingBottom: 100 },
   skeletonCard: { marginBottom: 16 },
   statsCardWrapper: {
-    paddingHorizontal: 24,
+    // paddingHorizontal: 24,
     paddingBottom: 8,
   },
   statsCard: {
@@ -457,6 +480,33 @@ const styles = StyleSheet.create({
   },
   pendingFlagValue: {
     fontSize: 20,
+    fontWeight: '800',
+  },
+  // Fix 5: Independent status badges
+  statusBadgesCol: {
+    gap: 10,
+    marginTop: 12,
+  },
+  radarBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 10,
+  },
+  radarBadgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  radarBadgeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  radarBadgeCount: {
+    fontSize: 16,
     fontWeight: '800',
   },
   statsTitle: {
@@ -485,7 +535,7 @@ const styles = StyleSheet.create({
     height: 140,
     borderRadius: 70,
     borderWidth: 16,
-    borderColor: 'rgba(0,0,0,0.05)',
+    borderColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -512,9 +562,14 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 18,
+    elevation: 8,
   },
   donutValue: {
     fontSize: 28,

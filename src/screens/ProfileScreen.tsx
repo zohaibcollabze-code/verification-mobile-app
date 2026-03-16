@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { AppModal } from '@/components/ui/AppModal';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { refreshAccessToken } from '@/services/auth/tokenManager';
 import { maskCnic, maskPhone } from '@/utils/formatters';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GeometricIcon } from '@/components/ui/GeometricIcon';
@@ -37,6 +38,7 @@ export function ProfileScreen() {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [isRefreshingToken, setIsRefreshingToken] = useState(false);
 
   // Edit State
   const [editName, setEditName] = useState(normalizedFullName);
@@ -60,7 +62,7 @@ export function ProfileScreen() {
     }
   }, [route.params?.openEdit, handleOpenEditModal]);
 
-  const { loading: updating, updateProfile, fetchProfile } = useProfile();
+  const { loading: updating, updateProfile, fetchProfile, error } = useProfile();
 
   useEffect(() => {
     fetchProfile();
@@ -152,6 +154,18 @@ export function ProfileScreen() {
     }
   }, [updateUser]);
 
+  const handleForceRefresh = useCallback(async () => {
+    try {
+      setIsRefreshingToken(true);
+      await refreshAccessToken();
+      Alert.alert('Success', 'Token refreshed successfully!');
+    } catch (err: any) {
+      Alert.alert('Refresh Failed', err?.message || 'Failed to refresh token');
+    } finally {
+      setIsRefreshingToken(false);
+    }
+  }, []);
+
   const assignedCities = useMemo(() => {
     const rawCities = user?.cities_covered ?? (user as any)?.citiesCovered;
     if (Array.isArray(rawCities) && rawCities.length > 0) {
@@ -208,12 +222,20 @@ export function ProfileScreen() {
           <View style={[styles.card, { backgroundColor: Colors.bgCard, borderColor: Colors.borderDefault }]}>
             <ProfileRow label="Full Name" value={normalizedFullName} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
             <View style={[styles.divider, { backgroundColor: Colors.borderDefault }]} />
-            <ProfileRow label="Identity (CNIC)" value={maskCnic(normalizedCnic)} isSecure color={Colors.textPrimary} labelColor={Colors.textSecondary} />
+            <ProfileRow label="Identity (CNIC)" value={maskCnic(normalizedCnic)} isSecure color={Colors.textPrimary} labelColor={Colors.textSecondary} fontFamily="DMMono_400Regular" />
             <View style={[styles.divider, { backgroundColor: Colors.borderDefault }]} />
-            <ProfileRow label="Mobile" value={maskPhone(normalizedPhone)} color={Colors.textPrimary} labelColor={Colors.textSecondary} />
+            <ProfileRow label="Mobile" value={maskPhone(normalizedPhone)} color={Colors.textPrimary} labelColor={Colors.textSecondary} fontFamily="DMMono_400Regular" />
             <View style={[styles.divider, { backgroundColor: Colors.borderDefault }]} />
             <ProfileRow label="Assigned Cities" value={assignedCities} multiline color={Colors.textPrimary} labelColor={Colors.textSecondary} />
           </View>
+          {error && (
+            <View style={styles.errorRetryRow}>
+              <Text style={[styles.errorText, { color: Colors.danger }]}>{error.message}</Text>
+              <Pressable onPress={fetchProfile} style={[styles.retryBtn, { borderColor: Colors.primary }]}>
+                <Text style={[styles.retryBtnText, { color: Colors.primary }]}>Retry</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         {/* System & Mode Section */}
@@ -272,6 +294,13 @@ export function ProfileScreen() {
         </View>
 
         {/* Logout CTA */}
+        <Button
+          title={isRefreshingToken ? "Refreshing..." : "🛠 Force Token Refresh (Test)"}
+          onPress={handleForceRefresh}
+          variant="secondary"
+          loading={isRefreshingToken}
+          style={StyleSheet.flatten([styles.logoutBtn, { marginTop: 24, marginBottom: 12 }]) as any}
+        />
         <Button
           title="Disconnect Session"
           onPress={handleSignOut}
@@ -391,7 +420,7 @@ export function ProfileScreen() {
   );
 }
 
-function ProfileRow({ label, value, isSecure, multiline, color, labelColor }: any) {
+function ProfileRow({ label, value, isSecure, multiline, color, labelColor, fontFamily }: any) {
   const Colors = useColors();
   const displayValue = value && value.toString().trim().length > 0 ? value : '—';
   return (
@@ -403,7 +432,7 @@ function ProfileRow({ label, value, isSecure, multiline, color, labelColor }: an
             <GeometricIcon type="Lock" size={12} color={Colors.textMuted} />
           </View>
         )}
-        <Text style={[styles.value, { color }, multiline && styles.valueMultiline]}>{displayValue}</Text>
+        <Text style={[styles.value, { color }, multiline && styles.valueMultiline, fontFamily ? { fontFamily } : undefined]}>{displayValue}</Text>
       </View>
     </View>
   );
@@ -598,6 +627,28 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
+  },
+  errorRetryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  retryBtn: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  retryBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   logoutBtn: {
     marginHorizontal: 24,

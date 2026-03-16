@@ -1,6 +1,7 @@
 import apiClient from '../api/apiClient';
 import { LoginRequest, ApiResponse, LoginResponse } from '../../types/auth';
 import { setAccessToken, setRefreshToken, setUserData, clearSecureStorage, getRefreshToken, setBackupRefreshToken } from '../storage/secureStorage';
+import { refreshAccessToken } from './tokenManager';
 
 export const authService = {
   login: async (request: LoginRequest): Promise<LoginResponse> => {
@@ -59,12 +60,6 @@ export const authService = {
   },
 
   refreshToken: async (): Promise<string> => {
-    const response = await apiClient.post<ApiResponse<{ accessToken: string }>>('/auth/refresh');
-    const newToken = response.data.data?.accessToken;
-    if (newToken) {
-      await setAccessToken(newToken);
-      return newToken;
-    }
-    throw new Error('Refresh failed: No token in response');
+    return refreshAccessToken();
   }
 };
